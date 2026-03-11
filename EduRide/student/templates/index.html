@@ -1,0 +1,129 @@
+
+{% extends "layout.html" %}
+{% load static %}
+{% block title %}Home Page{% endblock title %}
+{% block content %}
+<div class="min-h-screen w-full flex flex-col lg:flex-row bg-gray-100">
+
+    <!-- Map section -->
+    <div class="w-full lg:w-[70%] h-[80vh] lg:h-screen p-3 lg:p-4">
+        <div class="bg-white rounded-2xl shadow-md h-full overflow-hidden border border-gray-200">
+            <div class="px-4 py-3 lg:px-5 lg:py-4 border-b border-gray-200">
+                <h1 class="text-xl lg:text-2xl font-bold text-gray-800">Live Bus Tracking</h1>
+                <p class="text-sm text-gray-500">See your institute buses in real time</p>
+            </div>
+
+           <div id="map" class="w-full h-[65vh] md:h-[calc(100%-80px)]"></div>
+
+        </div>
+    </div>
+
+    <!-- Bus list section -->
+    <div class="w-full lg:w-[30%] h-auto lg:h-screen p-3 lg:p-4 lg:pl-0">
+        <div class="bg-white rounded-2xl shadow-md h-full border border-gray-200 flex flex-col">
+            <div class="px-4 py-3 lg:px-5 lg:py-4 border-b border-gray-200">
+                <h2 class="text-lg lg:text-xl font-semibold text-gray-800">Institute Buses</h2>
+                <p class="text-sm text-gray-500">Click any bus to view its location</p>
+            </div>
+
+            <div class="p-3 lg:p-4 overflow-y-auto space-y-3" id="bus-list">
+                <!-- Bus cards will be inserted here -->
+            </div>
+        </div>
+    </div>
+
+</div>
+
+<link
+  rel="stylesheet"
+  href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+/>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
+<script>
+    const buses = [
+        {
+            id: 1,
+            bus_no: "BUS-101",
+            route: "Patia to Campus",
+            driver: "Rakesh",
+            lat: 20.3552,
+            lng: 85.8195
+        },
+        {
+            id: 2,
+            bus_no: "BUS-102",
+            route: "Cuttack to Campus",
+            driver: "Suresh",
+            lat: 20.4625,
+            lng: 85.8828
+        },
+        {
+            id: 3,
+            bus_no: "BUS-103",
+            route: "Khandagiri to Campus",
+            driver: "Amit",
+            lat: 20.2961,
+            lng: 85.8245
+        }
+    ];
+
+    const map = L.map('map').setView([20.2961, 85.8245], 11);
+
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        attribution: '&copy; OpenStreetMap contributors'
+    }).addTo(map);
+
+    const markers = {};
+
+    buses.forEach(bus => {
+        const marker = L.marker([bus.lat, bus.lng])
+            .addTo(map)
+            .bindPopup(`
+                <div style="min-width:180px">
+                    <h3 style="font-weight:bold;">${bus.bus_no}</h3>
+                    <p>Route: ${bus.route}</p>
+                    <p>Driver: ${bus.driver}</p>
+                </div>
+            `);
+
+        markers[bus.id] = marker;
+    });
+
+    const busList = document.getElementById("bus-list");
+
+    buses.forEach(bus => {
+        const card = document.createElement("div");
+        card.className = "p-4 rounded-xl border border-gray-200 hover:bg-blue-50 cursor-pointer transition";
+
+        card.innerHTML = `
+            <h3 class="text-base lg:text-lg font-semibold text-gray-800">${bus.bus_no}</h3>
+            <p class="text-sm text-gray-600 mt-1"><span class="font-medium">Route:</span> ${bus.route}</p>
+            <p class="text-sm text-gray-600"><span class="font-medium">Driver:</span> ${bus.driver}</p>
+            <button class="mt-3 px-4 py-2 bg-blue-600 text-white rounded-lg text-sm hover:bg-blue-700">
+                View Location
+            </button>
+        `;
+
+        card.addEventListener("click", () => {
+            map.setView([bus.lat, bus.lng], 14, { animate: true });
+            markers[bus.id].openPopup();
+        });
+
+        busList.appendChild(card);
+    });
+
+    // Important fix for Leaflet on responsive layouts
+    window.addEventListener("load", () => {
+        setTimeout(() => {
+            map.invalidateSize();
+        }, 200);
+    });
+
+    window.addEventListener("resize", () => {
+        setTimeout(() => {
+            map.invalidateSize();
+        }, 200);
+    });
+</script>
+{% endblock %} 
