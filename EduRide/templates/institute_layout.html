@@ -8,7 +8,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1">
     {% block head %}{% endblock head %}
     {% tailwind_css %}
-    {% django_browser_reload_script %}
+    {% django_browser_reload_script %}  
 </head>
 
 <body class="flex flex-col min-h-screen bg-gray-100">
@@ -20,8 +20,8 @@
 
             <!-- Desktop nav -->
             <nav class="hidden md:flex space-x-6">
-                <a href="#" class="hover:text-gray-300">Home</a>
-                <a href="#" class="hover:text-gray-300">Payments</a>
+                <a href="{% url "institute_admin" %}" class="hover:text-gray-300">Home</a>
+                <a href="{% url "buslist" %}" class="hover:text-gray-300">Buses</a>
                 <a href="#" class="hover:text-gray-300">Log-Out</a>
             </nav>
 

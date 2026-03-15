@@ -1,0 +1,119 @@
+{% extends "institute_layout.html" %}
+{% block title %}institute{% endblock title %}
+{% block head %}
+<link
+rel="stylesheet"
+href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+/>
+<style>
+    #map {
+        width: 100%;
+        min-height: 75vh;
+        height: calc(100% - 80px);
+    }
+    #admin_map{
+        width: 90vw;
+        height:77vh;
+        margin:auto;
+        border:5px solid black;
+        border-radius:30px;
+    }
+</style>
+{% endblock head %}
+
+{% block content %}
+
+ <div id="admin_map">
+    <div class="h-full overflow-hidden border-[3px] border-gray-900 rounded-2xl">
+        <div id="map" class="w-full h-full"></div>
+    </div>
+</div>
+
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
+<script>
+
+const buses = [
+    {
+        id: 1,
+        bus_no: "BUS-101",
+        route: "Patia to Campus",
+        driver: "Rakesh",
+        lat: 20.3552,
+        lng: 85.8195
+    },
+    {
+        id: 2,
+        bus_no: "BUS-102",
+        route: "Cuttack to Campus",
+        driver: "Suresh",
+        lat: 20.4625,
+        lng: 85.8828
+    },
+    {
+        id: 3,
+        bus_no: "BUS-103",
+        route: "Khandagiri to Campus",
+        driver: "Amit",
+        lat: 20.2961,
+        lng: 85.8245
+    }
+];
+
+const map = L.map('map').setView([20.2961, 85.8245], 11);
+
+// Map Layers
+const streetLayer = L.tileLayer(
+'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
+{ attribution: '&copy; OpenStreetMap contributors' }
+);
+
+const darkLayer = L.tileLayer(
+'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png',
+{ attribution: '&copy; OpenStreetMap & CARTO' }
+);
+
+const baseLayers = {
+    "Street": streetLayer,
+    "Dark": darkLayer
+};
+
+streetLayer.addTo(map);
+
+L.control.layers(baseLayers).addTo(map);
+
+// Bus markers
+const markers = {};
+
+buses.forEach(bus => {
+
+    const marker = L.marker([bus.lat, bus.lng])
+    .addTo(map)
+    .bindPopup(`
+        <div style="min-width:180px">
+            <h3 style="font-weight:bold;">${bus.bus_no}</h3>
+            <p>Route: ${bus.route}</p>
+            <p>Driver: ${bus.driver}</p>
+        </div>
+    `);
+
+    markers[bus.id] = marker;
+
+});
+
+window.addEventListener("load", () => {
+    setTimeout(() => {
+        map.invalidateSize();
+    }, 200);
+});
+
+window.addEventListener("resize", () => {
+    setTimeout(() => {
+        map.invalidateSize();
+    }, 200);
+});
+
+</script>
+
+{% endblock content %}

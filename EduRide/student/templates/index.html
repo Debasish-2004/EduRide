@@ -8,9 +8,17 @@
     <!-- Map section -->
     <div class="w-full lg:w-[70%] h-[80vh] lg:h-screen p-3 lg:p-4">
         <div class="bg-white rounded-2xl shadow-md h-full overflow-hidden border border-gray-200">
-            <div class="px-4 py-3 lg:px-5 lg:py-4 border-b border-gray-200">
-                <h1 class="text-xl lg:text-2xl font-bold text-gray-800">Live Bus Tracking</h1>
-                <p class="text-sm text-gray-500">See your institute buses in real time</p>
+            <div class="px-4 py-3 lg:px-5 lg:py-4 border-b border-gray-200 flex items-center justify-between gap-3">
+                <div>
+                    <h1 class="text-xl lg:text-2xl font-bold text-gray-800">Live Bus Tracking</h1>
+                    <p class="text-sm text-gray-500">See your institute buses in real time</p>
+                </div>
+                <button
+                    id="current-location-btn"
+                    type="button"
+                    class="shrink-0 px-3 py-2 bg-slate-700 text-white rounded-lg text-sm hover:bg-slate-800 transition">
+                    📍
+                </button>
             </div>
 
            <div id="map" class="w-full h-[65vh] md:h-[calc(100%-80px)]"></div>
@@ -34,6 +42,7 @@
 
 </div>
 
+<!-- this is availble at leafjet.js ,,, cdn packages.-->
 <link
   rel="stylesheet"
   href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
@@ -41,6 +50,7 @@
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 
 <script>
+    //json style buses data.
     const buses = [
         {
             id: 1,
@@ -68,14 +78,47 @@
         }
     ];
 
+   //Available in Leaflet.js website . overview section...
     const map = L.map('map').setView([20.2961, 85.8245], 11);
 
-    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    //map layers
+    const streetLayer = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
         attribution: '&copy; OpenStreetMap contributors'
-    }).addTo(map);
+    });
+
+    const darkLayer = L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
+        attribution: '&copy; OpenStreetMap contributors &copy; CARTO'
+    });
+
+    const lightLayer = L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', {
+        attribution: '&copy; OpenStreetMap contributors &copy; CARTO'
+    });
+
+    const topoLayer = L.tileLayer('https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png', {
+        attribution: '&copy; OpenStreetMap contributors, SRTM | OpenTopoMap'
+    });
+
+    const satelliteLayer = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
+        attribution: 'Tiles &copy; Esri'
+    });
+
+    const baseLayers = {
+        "Street (OSM)": streetLayer,
+        "Dark": darkLayer,
+        "Light": lightLayer,
+        "Topographic": topoLayer,
+        "Satellite": satelliteLayer
+    };
+    // if there is dark theme on in system then it will show dark map by default.
+    const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+    const defaultLayer = prefersDark ? darkLayer : streetLayer;
+    defaultLayer.addTo(map);
+
+    L.control.layers(baseLayers, {}, { collapsed: true }).addTo(map);
 
     const markers = {};
 
+    //showing the bus popup when the marker is clicked.
     buses.forEach(bus => {
         const marker = L.marker([bus.lat, bus.lng])
             .addTo(map)
@@ -91,7 +134,10 @@
     });
 
     const busList = document.getElementById("bus-list");
+    const currentLocationBtn = document.getElementById("current-location-btn");
+    let currentLocationMarker = null;
 
+    //listing the cards in buslist...
     buses.forEach(bus => {
         const card = document.createElement("div");
         card.className = "p-4 rounded-xl border border-gray-200 hover:bg-blue-50 cursor-pointer transition";
@@ -111,6 +157,46 @@
         });
 
         busList.appendChild(card);
+    });
+
+    // Recenter map to user's current location on button click.
+    currentLocationBtn.addEventListener("click", () => {
+        if (!navigator.geolocation) {
+            alert("Geolocation is not supported by your browser.");
+            return;
+        }
+
+        currentLocationBtn.disabled = true;
+        currentLocationBtn.textContent = "Locating...";
+
+        navigator.geolocation.getCurrentPosition(
+            (position) => {
+                const { latitude, longitude } = position.coords;
+                map.setView([latitude, longitude], 15, { animate: true });
+
+                if (currentLocationMarker) {
+                    currentLocationMarker.setLatLng([latitude, longitude]);
+                } else {
+                    currentLocationMarker = L.marker([latitude, longitude])
+                        .addTo(map)
+                        .bindPopup("You are here");
+                }
+                currentLocationMarker.openPopup();
+
+                currentLocationBtn.disabled = false;
+                currentLocationBtn.textContent = "📍";
+            },
+            () => {
+                alert("Unable to fetch your current location. Please allow location access.");
+                currentLocationBtn.disabled = false;
+                currentLocationBtn.textContent = "📍";
+            },
+            {
+                enableHighAccuracy: true,
+                timeout: 10000,
+                maximumAge: 0
+            }
+        );
     });
 
     // Important fix for Leaflet on responsive layouts
