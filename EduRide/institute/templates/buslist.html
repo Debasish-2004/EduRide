@@ -1,0 +1,89 @@
+{% extends "institute_layout.html" %}
+{% block title %}institute{% endblock title %}
+
+{% block content %}
+<link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css"/>
+
+<script src="https://cdn.tailwindcss.com"></script>
+<script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
+    <div class="flex-1 p-8">
+
+    <h1 class="text-3xl font-bold mb-6">Bus Management</h1>
+
+    <button onclick="openAddBus()" 
+    class="bg-blue-600 text-white px-4 py-2 rounded mb-6">
+    Add Bus
+    </button>
+
+    <table class="w-full bg-white shadow rounded">
+
+    <thead class="bg-gray-200">
+    <tr>
+    <th class="p-3">Bus Number</th>
+    <th class="p-3">Driver</th>
+    <th class="p-3">Route</th>
+    <th class="p-3">Action</th>
+    </tr>
+    </thead>
+
+    <tbody id="busTable">
+
+    <tr>
+    <td class="p-3">BUS-101</td>
+    <td class="p-3">Ramesh</td>
+    <td class="p-3">Route A</td>
+
+    <td class="p-3 space-x-2">
+
+    <button class="bg-green-500 text-white px-3 py-1 rounded">
+    Edit Route
+    </button>
+
+    <button class="bg-red-500 text-white px-3 py-1 rounded">
+    Delete
+    </button>
+
+    </td>
+
+    </tr>
+
+    </tbody>
+    </table>
+
+    </div>
+    </div>
+
+
+    <!-- Add Bus Modal -->
+
+    <div id="addBusModal" class="hidden fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center">
+
+    <div class="bg-white p-6 rounded w-96">
+
+    <h2 class="text-xl font-bold mb-4">Add Bus</h2>
+
+    <input type="text" placeholder="Bus Number"
+    class="border p-2 w-full mb-3">
+
+    <input type="text" placeholder="Driver Name"
+    class="border p-2 w-full mb-3">
+
+    <button class="bg-blue-600 text-white px-4 py-2 rounded w-full">
+    Add Bus
+    </button>
+
+    </div>
+
+    </div>
+
+
+    <script>
+
+    function openAddBus(){
+    document.getElementById("addBusModal").classList.remove("hidden")
+    }
+
+    </script>
+
+
+{% endblock content %}
