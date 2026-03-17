@@ -1,0 +1,339 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Create Route</title>
+
+    <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
+    <link
+      rel="stylesheet"
+      href="https://unpkg.com/leaflet-routing-machine/dist/leaflet-routing-machine.css"
+    />
+
+    <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
+    <script src="https://unpkg.com/leaflet-routing-machine/dist/leaflet-routing-machine.js"></script>
+
+    <style>
+      body {
+        font-family: Arial, sans-serif;
+        background: #f8fafc;
+        margin: 0;
+        padding: 30px;
+      }
+
+      .container {
+        max-width: 1000px;
+        margin: 0 auto;
+        background: white;
+        padding: 24px;
+        border-radius: 16px;
+        box-shadow: 0 8px 24px rgba(0, 0, 0, 0.08);
+      }
+
+      h1 {
+        margin-top: 0;
+        margin-bottom: 20px;
+        color: #0f172a;
+      }
+
+      label {
+        display: block;
+        margin-bottom: 8px;
+        font-weight: 600;
+        color: #334155;
+      }
+
+      input[type="text"] {
+        width: 100%;
+        padding: 12px;
+        border: 1px solid #cbd5e1;
+        border-radius: 10px;
+        margin-bottom: 18px;
+        font-size: 15px;
+        box-sizing: border-box;
+      }
+
+      #map {
+        width: 100%;
+        height: 500px;
+        border-radius: 14px;
+        overflow: hidden;
+        margin-top: 10px;
+      }
+
+      .btn-row {
+        display: flex;
+        gap: 12px;
+        flex-wrap: wrap;
+        margin-top: 20px;
+      }
+
+      button {
+        border: none;
+        border-radius: 10px;
+        padding: 12px 18px;
+        font-size: 15px;
+        cursor: pointer;
+      }
+
+      .btn-primary {
+        background: #2563eb;
+        color: white;
+      }
+
+      .btn-primary:hover {
+        background: #1d4ed8;
+      }
+
+      .btn-warning {
+        background: #f59e0b;
+        color: white;
+      }
+
+      .btn-warning:hover {
+        background: #d97706;
+      }
+
+      .btn-danger {
+        background: #ef4444;
+        color: white;
+      }
+
+      .btn-danger:hover {
+        background: #dc2626;
+      }
+
+      .error-box {
+        background: #fee2e2;
+        color: #991b1b;
+        padding: 12px 14px;
+        border-radius: 10px;
+        margin-bottom: 16px;
+      }
+
+      .info-box {
+        background: #e0f2fe;
+        color: #075985;
+        padding: 12px 14px;
+        border-radius: 10px;
+        margin-bottom: 18px;
+      }
+
+      .point-count {
+        margin-top: 14px;
+        font-size: 14px;
+        color: #475569;
+      }
+
+      .leaflet-routing-container {
+        display: none;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="container">
+      <h1>Create Route</h1>
+
+      {% if error %}
+      <div class="error-box">{{ error }}</div>
+      {% endif %}
+
+      <div class="info-box">
+        Click on the map to add route waypoints. The road-following route will
+        be generated automatically.
+      </div>
+
+      <form method="POST" onsubmit="return validateRouteBeforeSubmit();">
+        {% csrf_token %}
+        <label for="name">Bus-No</label>
+        <input
+          type="text"
+          id="no"
+          name="no"
+          placeholder="Enter route name"
+          required
+        />
+        <label for="name">Route Name</label>
+        <input
+          type="text"
+          id="name"
+          name="name"
+          placeholder="Enter route name"
+          required
+        />
+
+        <input type="hidden" name="coordinates" id="coordinates" />
+        <input type="hidden" name="waypoints" id="waypoints" />
+
+        <div id="map"></div>
+
+        <div class="point-count">
+          Waypoints selected: <span id="pointCount">0</span>
+        </div>
+
+        <div class="btn-row">
+          <button type="button" class="btn-warning" onclick="undoPoint()">
+            Undo Last Point
+          </button>
+
+          <button type="button" class="btn-danger" onclick="clearRoute()">
+            Clear Route
+          </button>
+
+          <button type="submit" class="btn-primary">Save Route</button>
+        </div>
+      </form>
+    </div>
+
+    <script>
+      const map = L.map("map").setView([20.2961, 85.8245], 13);
+
+      L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+        attribution: "&copy; OpenStreetMap contributors",
+      }).addTo(map);
+
+      let waypoints = [];
+      let routingControl = null;
+      let latestRouteCoordinates = [];
+
+      function createRoutingControl() {
+        if (routingControl) {
+          map.removeControl(routingControl);
+        }
+
+        routingControl = L.Routing.control({
+          waypoints: waypoints.map((point) => L.latLng(point[0], point[1])),
+          router: L.Routing.osrmv1({
+            serviceUrl: "https://router.project-osrm.org/route/v1",
+          }),
+          lineOptions: {
+            styles: [{ color: "#2563eb", opacity: 0.9, weight: 6 }],
+          },
+          addWaypoints: false,
+          draggableWaypoints: false,
+          fitSelectedRoutes: true,
+          show: false,
+          routeWhileDragging: false,
+          createMarker: function (i, wp) {
+            return L.marker(wp.latLng, {
+              draggable: false,
+            }).bindPopup("Point " + (i + 1));
+          },
+        }).addTo(map);
+
+        routingControl.on("routesfound", function (e) {
+          const route = e.routes[0];
+          latestRouteCoordinates = route.coordinates.map((coord) => [
+            coord.lat,
+            coord.lng,
+          ]);
+
+          document.getElementById("coordinates").value = JSON.stringify(
+            latestRouteCoordinates,
+          );
+          document.getElementById("waypoints").value =
+            JSON.stringify(waypoints);
+        });
+
+        routingControl.on("routingerror", function () {
+          latestRouteCoordinates = [];
+          document.getElementById("coordinates").value = "";
+        });
+      }
+
+      map.on("click", function (e) {
+        const lat = e.latlng.lat;
+        const lng = e.latlng.lng;
+
+        waypoints.push([lat, lng]);
+        document.getElementById("pointCount").textContent = waypoints.length;
+        document.getElementById("waypoints").value = JSON.stringify(waypoints);
+
+        if (waypoints.length === 1) {
+          if (routingControl) {
+            map.removeControl(routingControl);
+            routingControl = null;
+          }
+          latestRouteCoordinates = [];
+          document.getElementById("coordinates").value = "";
+          L.marker([lat, lng]).addTo(map);
+          return;
+        }
+
+        removeTemporaryMarkers();
+        createRoutingControl();
+      });
+
+      function undoPoint() {
+        if (waypoints.length === 0) return;
+
+        waypoints.pop();
+        document.getElementById("pointCount").textContent = waypoints.length;
+        document.getElementById("waypoints").value = JSON.stringify(waypoints);
+
+        latestRouteCoordinates = [];
+        document.getElementById("coordinates").value = "";
+
+        if (routingControl) {
+          map.removeControl(routingControl);
+          routingControl = null;
+        }
+
+        clearNonTileLayers();
+
+        if (waypoints.length === 1) {
+          L.marker([waypoints[0][0], waypoints[0][1]]).addTo(map);
+        } else if (waypoints.length >= 2) {
+          createRoutingControl();
+        }
+      }
+
+      function clearRoute() {
+        waypoints = [];
+        latestRouteCoordinates = [];
+
+        document.getElementById("coordinates").value = "";
+        document.getElementById("waypoints").value = "";
+        document.getElementById("pointCount").textContent = "0";
+
+        if (routingControl) {
+          map.removeControl(routingControl);
+          routingControl = null;
+        }
+
+        clearNonTileLayers();
+      }
+
+      function clearNonTileLayers() {
+        map.eachLayer(function (layer) {
+          if (!(layer instanceof L.TileLayer)) {
+            map.removeLayer(layer);
+          }
+        });
+      }
+
+      function removeTemporaryMarkers() {
+        map.eachLayer(function (layer) {
+          if (layer instanceof L.Marker && !(layer instanceof L.TileLayer)) {
+            map.removeLayer(layer);
+          }
+        });
+      }
+
+      function validateRouteBeforeSubmit() {
+        if (waypoints.length < 2) {
+          alert("Please select at least 2 points.");
+          return false;
+        }
+
+        if (latestRouteCoordinates.length < 2) {
+          alert("Route is not ready yet. Please wait a moment and try again.");
+          return false;
+        }
+
+        return true;
+      }
+    </script>
+  </body>
+</html>

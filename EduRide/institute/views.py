@@ -6,3 +6,6 @@ def institute_admin(request):
 
 def buslist(request):
     return render(request, "buslist.html")
+
+def route(request):
+    return render(request, "create_route.html")
