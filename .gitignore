@@ -1,7 +1,7 @@
 # Python cache
 __pycache__/
 *.pyc
-
+.vscode/
 # Virtual environment
 venv/
 .venv/
