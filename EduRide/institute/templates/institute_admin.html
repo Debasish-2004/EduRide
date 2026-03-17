@@ -39,7 +39,6 @@ const buses = [
         id: 1,
         bus_no: "BUS-101",
         route: "Patia to Campus",
-        driver: "Rakesh",
         lat: 20.3552,
         lng: 85.8195
     },
@@ -47,7 +46,6 @@ const buses = [
         id: 2,
         bus_no: "BUS-102",
         route: "Cuttack to Campus",
-        driver: "Suresh",
         lat: 20.4625,
         lng: 85.8828
     },
@@ -55,7 +53,6 @@ const buses = [
         id: 3,
         bus_no: "BUS-103",
         route: "Khandagiri to Campus",
-        driver: "Amit",
         lat: 20.2961,
         lng: 85.8245
     }
@@ -94,7 +91,6 @@ buses.forEach(bus => {
         <div style="min-width:180px">
             <h3 style="font-weight:bold;">${bus.bus_no}</h3>
             <p>Route: ${bus.route}</p>
-            <p>Driver: ${bus.driver}</p>
         </div>
     `);
 
