@@ -3,7 +3,7 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Create Route</title>
+    <title>Edit Route</title>
 
     <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
     <link
@@ -133,34 +133,35 @@
   </head>
   <body>
     <div class="container">
-      <h1>Create Route</h1>
+      <h1>Edit Route</h1>
 
       {% if error %}
       <div class="error-box">{{ error }}</div>
       {% endif %}
 
       <div class="info-box">
-        Click on the map to add route waypoints. The road-following route will
-        be generated automatically.
+        Existing route is loaded. You can add new waypoints, undo points, or clear and redraw the full route.
       </div>
 
       <form method="POST" onsubmit="return validateRouteBeforeSubmit();">
         {% csrf_token %}
-        <label for="name">Bus-No</label>
+
+        <label for="no">Bus-No</label>
         <input
           type="text"
           id="no"
           name="no"
-          value="{{ form_data.bus_no|default:'' }}"
-          placeholder="Enter Bus no . The format prefered INSTITUTENAME-NUMBER"
+          value="{{ bus.bus_no }}"
+          placeholder="Enter Bus no"
           required
         />
-        <label for="Route_name">Route Name</label>
+
+        <label for="route_name">Route Name</label>
         <input
           type="text"
           id="route_name"
           name="route_name"
-          value="{{ form_data.route_name|default:'' }}"
+          value="{{ bus.route_name }}"
           placeholder="Enter route name"
           required
         />
@@ -183,7 +184,7 @@
             Clear Route
           </button>
 
-          <button type="submit" class="btn-primary">Save Route</button>
+          <button type="submit" class="btn-primary">Update Route</button>
         </div>
       </form>
     </div>
@@ -198,6 +199,9 @@
       let waypoints = [];
       let routingControl = null;
       let latestRouteCoordinates = [];
+
+      const existingWaypoints = JSON.parse('{{ bus.waypoints|escapejs }}');
+      const existingCoordinates = JSON.parse('{{ bus.coordinates|escapejs }}');
 
       function createRoutingControl() {
         if (routingControl) {
@@ -231,17 +235,38 @@
             coord.lng,
           ]);
 
-          document.getElementById("coordinates").value = JSON.stringify(
-            latestRouteCoordinates,
-          );
-          document.getElementById("waypoints").value =
-            JSON.stringify(waypoints);
+          document.getElementById("coordinates").value = JSON.stringify(latestRouteCoordinates);
+          document.getElementById("waypoints").value = JSON.stringify(waypoints);
+          document.getElementById("pointCount").textContent = waypoints.length;
         });
 
         routingControl.on("routingerror", function () {
           latestRouteCoordinates = [];
           document.getElementById("coordinates").value = "";
         });
+      }
+
+      function loadExistingRoute() {
+        if (existingWaypoints && existingWaypoints.length > 0) {
+          waypoints = existingWaypoints;
+          document.getElementById("waypoints").value = JSON.stringify(waypoints);
+          document.getElementById("pointCount").textContent = waypoints.length;
+
+          if (waypoints.length >= 2) {
+            createRoutingControl();
+          } else if (waypoints.length === 1) {
+            L.marker([waypoints[0][0], waypoints[0][1]]).addTo(map);
+          }
+
+          const latLngs = waypoints.map((point) => L.latLng(point[0], point[1]));
+          const bounds = L.latLngBounds(latLngs);
+          map.fitBounds(bounds, { padding: [20, 20] });
+        }
+
+        if (existingCoordinates && existingCoordinates.length > 0) {
+          latestRouteCoordinates = existingCoordinates;
+          document.getElementById("coordinates").value = JSON.stringify(existingCoordinates);
+        }
       }
 
       map.on("click", function (e) {
@@ -257,13 +282,16 @@
             map.removeControl(routingControl);
             routingControl = null;
           }
+
           latestRouteCoordinates = [];
           document.getElementById("coordinates").value = "";
+
+          clearNonTileLayers();
           L.marker([lat, lng]).addTo(map);
           return;
         }
 
-        removeTemporaryMarkers();
+        clearNonTileLayers();
         createRoutingControl();
       });
 
@@ -299,7 +327,7 @@
         document.getElementById("waypoints").value = "";
         document.getElementById("pointCount").textContent = "0";
 
-        if (routingControl) { 
+        if (routingControl) {
           map.removeControl(routingControl);
           routingControl = null;
         }
@@ -310,14 +338,6 @@
       function clearNonTileLayers() {
         map.eachLayer(function (layer) {
           if (!(layer instanceof L.TileLayer)) {
-            map.removeLayer(layer);
-          }
-        });
-      }
-
-      function removeTemporaryMarkers() {
-        map.eachLayer(function (layer) {
-          if (layer instanceof L.Marker && !(layer instanceof L.TileLayer)) {
             map.removeLayer(layer);
           }
         });
@@ -336,6 +356,8 @@
 
         return true;
       }
+
+      loadExistingRoute();
     </script>
   </body>
 </html>

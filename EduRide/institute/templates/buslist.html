@@ -6,65 +6,44 @@
 
 <script src="https://cdn.tailwindcss.com"></script>
 <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
-    <div class="flex-1 p-8">
 
+<div class="flex-1 p-8">
     <h1 class="text-3xl font-bold mb-6">Bus Management</h1>
 
     <button onclick="window.location.href='{% url 'route' %}'"
-    class="bg-blue-600 text-white px-4 py-2 rounded mb-6">
-    Add Bus
+        class="bg-blue-600 text-white px-4 py-2 rounded mb-6">
+        Add Bus
     </button>
 
     <div id="busGrid" class="grid grid-cols-1 md:grid-cols-2 gap-6">
-
-      <!-- Bus card example -->
-    <div class="bg-white rounded-xl shadow p-5 flex flex-col justify-between">
-            <div class="flex justify-between items-center">
-            <h3 class="text-xl font-semibold">BUS-101</h3>
-            <p class="text-sm text-gray-600">Route A</p>
-            </div>
-        <div class="mt-4 flex flex-wrap gap-2">
-          <button class="flex-1 bg-green-500 text-white px-3 py-2 rounded hover:bg-green-600">
-            Edit
-          </button>
-          <button class="flex-1 bg-red-500 text-white px-3 py-2 rounded hover:bg-red-600">
-            Delete
-          </button>
-        </div>
-    </div>
-
+        {% for bus in buses %}
         <div class="bg-white rounded-xl shadow p-5 flex flex-col justify-between">
             <div class="flex justify-between items-center">
-            <h3 class="text-xl font-semibold">BUS-101</h3>
-            <p class="text-sm text-gray-600">Route A</p>
+                <h3 class="text-xl font-semibold">{{ bus.bus_no }}</h3>
+                <p class="text-sm text-gray-600">{{ bus.route_name }}</p>
             </div>
-        <div class="mt-4 flex flex-wrap gap-2">
-          <button class="flex-1 bg-green-500 text-white px-3 py-2 rounded hover:bg-green-600">
-            Edit
-          </button>
-          <button class="flex-1 bg-red-500 text-white px-3 py-2 rounded hover:bg-red-600">
-            Delete
-          </button>
-        </div>
-    </div>
 
-
-     <div class="bg-white rounded-xl shadow p-5 flex flex-col justify-between">
-            <div class="flex justify-between items-center">
-            <h3 class="text-xl font-semibold">BUS-101</h3>
-            <p class="text-sm text-gray-600">Route A</p>
+            <div class="mt-4 flex flex-wrap gap-2">
+                <a href="{% url 'edit_route' bus.id %}"
+                  class="flex-1 bg-green-500 text-white px-3 py-2 rounded hover:bg-green-600 text-center">
+                    Edit
+                </a>
+                <!--Delete is used inside the form to protect the data using csrf token .. and to prevent deleted by without will.-->
+                <form action="{% url 'delete_route' bus.id %}" method="POST" class="flex-1">
+                    {% csrf_token %}
+                    <button type="submit"
+                        class="w-full bg-red-500 text-white px-3 py-2 rounded hover:bg-red-600">
+                        Delete
+                    </button>
+                </form>
             </div>
-        <div class="mt-4 flex flex-wrap gap-2">
-          <button class="flex-1 bg-green-500 text-white px-3 py-2 rounded hover:bg-green-600">
-            Edit
-          </button>
-          <button class="flex-1 bg-red-500 text-white px-3 py-2 rounded hover:bg-red-600">
-            Delete
-          </button>
         </div>
+        {% empty %}
+        <div class="bg-white rounded-xl shadow p-5 col-span-full text-center text-gray-500">
+            No buses added yet.
+        </div>
+        {% endfor %}
     </div>
-
-    </div>
-    </div>
+</div>
 
 {% endblock content %}
