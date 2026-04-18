@@ -22,7 +22,12 @@
             <nav class="hidden md:flex space-x-6">
                 <a href="{% url "institute_admin" %}" class="hover:text-gray-300">Home</a>
                 <a href="{% url "buslist" %}" class="hover:text-gray-300">Buses</a>
-                <a href="#" class="hover:text-gray-300">Log-Out</a>
+                <form action="{% url 'institute_logout' %}" method="POST">
+                {% csrf_token %}
+                <button type="submit" class="hover:text-gray-300 text-left">
+                    Log-Out
+                </button>
+</form>
             </nav>
 
             <!-- Mobile hamburger -->
@@ -66,7 +71,12 @@
         <nav class="flex flex-col p-4 space-y-4">
                 <a href="{% url "institute_admin" %}" class="hover:text-gray-300">Home</a>
                 <a href="{% url "buslist" %}" class="hover:text-gray-300">Buses</a>
-                <a href="#" class="hover:text-gray-300">Log-Out</a>
+                <form action="{% url 'institute_logout' %}" method="POST">
+                {% csrf_token %}
+                <button type="submit" class="hover:text-gray-300">
+                    Log-Out
+                </button>
+</form>
         </nav>
     </div>
 

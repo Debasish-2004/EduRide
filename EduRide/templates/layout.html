@@ -22,7 +22,12 @@
             <nav class="hidden md:flex space-x-6">
                 <a href="#" class="hover:text-gray-300">Home</a>
                 <a href="#" class="hover:text-gray-300">Payments</a>
-                <a href="#" class="hover:text-gray-300">Log-Out</a>
+                <form action="{% url 'student_logout' %}" method="POST">
+                    {% csrf_token %}
+                    <button type="submit" class="text-red-600 hover:underline">
+                        Logout
+                    </button>
+                </form>
             </nav>
 
             <!-- Mobile hamburger -->

@@ -28,35 +28,13 @@ href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
         <div id="map" class="w-full h-full"></div>
     </div>
 </div>
-
+<!--for the bus locations-->
+{{ buses|json_script:"buses-data" }}
 
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 
 <script>
-
-const buses = [
-    {
-        id: 1,
-        bus_no: "BUS-101",
-        route: "Patia to Campus",
-        lat: 20.3552,
-        lng: 85.8195
-    },
-    {
-        id: 2,
-        bus_no: "BUS-102",
-        route: "Cuttack to Campus",
-        lat: 20.4625,
-        lng: 85.8828
-    },
-    {
-        id: 3,
-        bus_no: "BUS-103",
-        route: "Khandagiri to Campus",
-        lat: 20.2961,
-        lng: 85.8245
-    }
-];
+const buses = JSON.parse(document.getElementById("buses-data").textContent);
 
 const map = L.map('map').setView([20.2961, 85.8245], 11);
 
