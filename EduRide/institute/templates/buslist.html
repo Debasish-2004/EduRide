@@ -29,7 +29,8 @@
                     Edit
                 </a>
                 <!--Delete is used inside the form to protect the data using csrf token .. and to prevent deleted by without will.-->
-                <form action="{% url 'delete_route' bus.id %}" method="POST" class="flex-1">
+                <form action="{% url 'delete_route' bus.id %}" method="POST" class="flex-1"
+                    onsubmit="return confirm('Delete bus {{ bus.bus_no|escapejs }} for route {{ bus.route_name|escapejs }}?');">
                     {% csrf_token %}
                     <button type="submit"
                         class="w-full bg-red-500 text-white px-3 py-2 rounded hover:bg-red-600">
