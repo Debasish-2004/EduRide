@@ -4,7 +4,7 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>{% block title %}My Site{% endblock %}</title>
+    <title>{% block title %}Driver Dashboard{% endblock %}</title>
     <meta name="viewport" content="width=device-width, initial-scale=1">
     {% block head %}{% endblock head %}
     {% tailwind_css %}
@@ -14,17 +14,16 @@
 <body class="flex flex-col min-h-screen bg-gray-100">
 
     <!-- Header -->
-    <header class="bg-gray-900 text-white relative z-50">
+    <header class="bg-emerald-800 text-white relative z-50">
         <div class="max-w-7xl mx-auto px-4 sm:px-6 py-4 flex justify-between items-center">
-            <h1 class="text-xl font-bold">EduRide</h1>
+            <h1 class="text-xl font-bold">EduRide — Driver</h1>
 
             <!-- Desktop nav -->
             <nav class="hidden md:flex space-x-6">
-                <a href="#" class="hover:text-gray-300">Home</a>
-                <a href="#" class="hover:text-gray-300">Payments</a>
-                <form action="{% url 'student_logout' %}" method="POST">
+                <a href="{% url 'driver_dashboard' %}" class="hover:text-emerald-200">Dashboard</a>
+                <form action="{% url 'driver_logout' %}" method="POST">
                     {% csrf_token %}
-                    <button type="submit" class="text-red-600 hover:underline">
+                    <button type="submit" class="text-red-300 hover:text-red-100 hover:underline">
                         Logout
                     </button>
                 </form>
@@ -33,7 +32,7 @@
             <!-- Mobile hamburger -->
             <button
                 id="menu-btn"
-                class="md:hidden p-2 rounded hover:bg-gray-800"
+                class="md:hidden p-2 rounded hover:bg-emerald-700"
                 aria-label="Open menu"
             >
                 <svg xmlns="http://www.w3.org/2000/svg" class="w-6 h-6" fill="none"
@@ -51,13 +50,13 @@
     <!-- Mobile right drawer -->
     <div
         id="mobile-menu"
-        class="fixed top-0 right-0 h-full w-1/2 max-w-xs bg-gray-900 text-white z-50 transform translate-x-full transition-transform duration-300 md:hidden shadow-2xl"
+        class="fixed top-0 right-0 h-full w-1/2 max-w-xs bg-emerald-800 text-white z-50 transform translate-x-full transition-transform duration-300 md:hidden shadow-2xl"
     >
-        <div class="flex justify-between items-center px-4 py-4 border-b border-gray-700">
+        <div class="flex justify-between items-center px-4 py-4 border-b border-emerald-600">
             <h2 class="text-lg font-semibold">Menu</h2>
             <button
                 id="close-menu"
-                class="p-2 rounded hover:bg-gray-800"
+                class="p-2 rounded hover:bg-emerald-700"
                 aria-label="Close menu"
             >
                 <svg xmlns="http://www.w3.org/2000/svg" class="w-6 h-6" fill="none"
@@ -68,14 +67,11 @@
             </button>
         </div>
 
-        <!-- Mobile drawer navigation links -->
         <nav class="flex flex-col p-4 space-y-4">
-            <a href="{% url 'home' %}" class="hover:text-gray-300">Home</a>
-            <a href="#" class="hover:text-gray-300">Payments</a>
-            <!-- Logout form uses POST to prevent CSRF logout attacks -->
-            <form action="{% url 'student_logout' %}" method="POST">
+            <a href="{% url 'driver_dashboard' %}" class="hover:text-emerald-200">Dashboard</a>
+            <form action="{% url 'driver_logout' %}" method="POST">
                 {% csrf_token %}
-                <button type="submit" class="text-red-400 hover:text-red-300 text-left">
+                <button type="submit" class="text-red-300 hover:text-red-100 text-left">
                     Logout
                 </button>
             </form>
@@ -83,13 +79,13 @@
     </div>
 
     <!-- Content -->
-    <main class=" relative z-0 flex-grow w-full mx-auto px-1 py-1">
+    <main class="relative z-0 flex-grow w-full mx-auto px-1 py-1">
         {% block content %}
         {% endblock %}
     </main>
 
     <!-- Footer -->
-    <footer class="bg-gray-900 text-white">
+    <footer class="bg-emerald-800 text-white">
         <div class="max-w-7xl mx-auto px-4 sm:px-6 py-4 text-center">
             © 2026 EduRide. All rights reserved.
         </div>

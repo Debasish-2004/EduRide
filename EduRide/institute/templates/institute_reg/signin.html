@@ -1,11 +1,12 @@
 {% load static %}
+{% load static tailwind_tags %}
 <!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Institute Sign In</title>
-    <script src="https://cdn.tailwindcss.com"></script>
+     {% tailwind_css %}
 </head>
 <body class="min-h-screen flex items-center justify-center bg-gray-100">
 
@@ -60,7 +61,7 @@
             <span class="text-sm text-gray-600">
                 Don't have an account?
             </span>
-            <a href="{% url 'student_signup' %}"
+            <a href="{% url 'institute_signup' %}"
                class="text-sm text-blue-600 hover:underline">
                 Sign up
             </a>

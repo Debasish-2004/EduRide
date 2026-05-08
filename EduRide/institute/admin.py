@@ -4,4 +4,5 @@ from .models import Route
 
 @admin.register(Route)
 class RouteAdmin(admin.ModelAdmin):
-    list_display = ("id", "bus_no", "route_name")
+    list_display = ("id", "bus_no", "route_name", "driver", "is_active")
+    list_filter = ("is_active",)
