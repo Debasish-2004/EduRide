@@ -1,14 +1,30 @@
 {% extends "institute_layout.html" %}
-{% block title %}institute{% endblock title %}
+{% block title %}Bus Management{% endblock title %}
 
 {% block content %}
 <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css"/>
 
-<script src="https://cdn.tailwindcss.com"></script>
+
 <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
 
 <div class="flex-1 p-8">
     <h1 class="text-3xl font-bold mb-6">Bus Management</h1>
+
+    {% if messages %}
+        {% for message in messages %}
+            <div class="mb-4 px-4 py-3 rounded-lg text-sm
+                {% if message.tags == 'error' %}
+                    bg-red-100 text-red-700
+                {% elif message.tags == 'success' %}
+                    bg-green-100 text-green-700
+                {% else %}
+                    bg-gray-100 text-gray-700
+                {% endif %}
+            ">
+                {{ message }}
+            </div>
+        {% endfor %}
+    {% endif %}
 
     <button onclick="window.location.href='{% url 'route' %}'"
         class="bg-blue-600 text-white px-4 py-2 rounded mb-6">
@@ -18,9 +34,60 @@
     <div id="busGrid" class="grid grid-cols-1 md:grid-cols-2 gap-6">
         {% for bus in buses %}
         <div class="bg-white rounded-xl shadow p-5 flex flex-col justify-between">
-            <div class="flex justify-between items-center">
-                <h3 class="text-xl font-semibold">{{ bus.bus_no }}</h3>
-                <p class="text-sm text-gray-600">{{ bus.route_name }}</p>
+            <div class="flex justify-between items-start">
+                <div>
+                    <h3 class="text-xl font-semibold">{{ bus.bus_no }}</h3>
+                    <p class="text-sm text-gray-600">{{ bus.route_name }}</p>
+                </div>
+
+                <!-- Status badge -->
+                {% if bus.is_active %}
+                    <span class="px-2 py-1 text-xs font-medium bg-green-100 text-green-700 rounded-full">Active</span>
+                {% else %}
+                    <span class="px-2 py-1 text-xs font-medium bg-gray-100 text-gray-500 rounded-full">Offline</span>
+                {% endif %}
+            </div>
+
+            <!-- Driver assignment section -->
+            <div class="mt-3 p-3 bg-gray-50 rounded-lg border border-gray-200">
+                {% if bus.driver %}
+                    <div class="flex items-center justify-between">
+                        <div>
+                            <p class="text-sm text-gray-500">Assigned Driver</p>
+                            <p class="font-medium text-gray-800">{{ bus.driver.username }}</p>
+                        </div>
+                        <form action="{% url 'assign_driver' bus.id %}" method="POST">
+                            {% csrf_token %}
+                            <input type="hidden" name="driver_id" value="">
+                            <button type="submit"
+                                class="text-sm px-3 py-1 bg-red-100 text-red-600 rounded hover:bg-red-200 transition"
+                                onclick="return confirm('Unassign driver {{ bus.driver.username|escapejs }} from bus {{ bus.bus_no|escapejs }}?');">
+                                Unassign
+                            </button>
+                        </form>
+                    </div>
+                {% else %}
+                    <form action="{% url 'assign_driver' bus.id %}" method="POST" class="flex items-end gap-2">
+                        {% csrf_token %}
+                        <div class="flex-1">
+                            <label class="text-sm text-gray-500 block mb-1">Assign Driver</label>
+                            <select name="driver_id"
+                                class="w-full text-sm border border-gray-300 rounded px-2 py-1.5 focus:outline-none focus:ring-2 focus:ring-blue-500">
+                                <option value="" disabled selected>Select a driver...</option>
+                                {% for driver in available_drivers %}
+                                    <option value="{{ driver.id }}">{{ driver.username }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <button type="submit"
+                            class="text-sm px-3 py-1.5 bg-blue-500 text-white rounded hover:bg-blue-600 transition">
+                            Assign
+                        </button>
+                    </form>
+                    {% if not available_drivers %}
+                        <p class="text-xs text-gray-400 mt-1">No available drivers to assign.</p>
+                    {% endif %}
+                {% endif %}
             </div>
 
             <div class="mt-4 flex flex-wrap gap-2">

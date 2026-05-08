@@ -96,14 +96,40 @@
 
     const markers = {};
 
+    // Grey marker icon for offline buses
+    const offlineIcon = L.icon({
+        iconUrl: 'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-grey.png',
+        iconRetinaUrl: 'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-grey.png',
+        shadowUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-shadow.png',
+        iconSize: [25, 41],
+        iconAnchor: [12, 41],
+        popupAnchor: [1, -34],
+        shadowSize: [41, 41]
+    });
+
+    // Bus emoji icon for active buses
+    const busIcon = L.divIcon({
+        html: '<div style="font-size:28px;line-height:1;filter:drop-shadow(1px 2px 2px rgba(0,0,0,0.3));">🚌</div>',
+        iconSize: [32, 32],
+        iconAnchor: [16, 16],
+        popupAnchor: [0, -16],
+        className: '',  // Remove default Leaflet div-icon styling
+    });
+
     //showing the bus popup when the marker is clicked.
     buses.forEach(bus => {
-        const marker = L.marker([bus.lat, bus.lng])
+        const markerOptions = bus.is_active ? { icon: busIcon } : { icon: offlineIcon, opacity: 0.5 };
+        const statusLabel = bus.is_active
+            ? '<span style="color:green;font-weight:bold;">● Active</span>'
+            : '<span style="color:gray;">○ Offline</span>';
+
+        const marker = L.marker([bus.lat, bus.lng], markerOptions)
             .addTo(map)
             .bindPopup(`
                 <div style="min-width:180px">
                     <h3 style="font-weight:bold;">${bus.bus_no}</h3>
                     <p>Route: ${bus.route}</p>
+                    <p>${statusLabel}</p>
                 </div>
             `);
 
@@ -134,10 +160,21 @@
     else{
         buses.forEach(bus => {
             const card = document.createElement("div");
+            // Offline buses get low opacity to visually distinguish them
             card.className = "p-4 rounded-xl border border-gray-200 hover:bg-blue-50 cursor-pointer transition";
+            if (!bus.is_active) {
+                card.style.opacity = "0.45";
+            }
+
+            const statusBadge = bus.is_active
+                ? '<span class="inline-block px-2 py-0.5 bg-green-100 text-green-700 rounded-full text-xs font-medium">Active</span>'
+                : '<span class="inline-block px-2 py-0.5 bg-gray-100 text-gray-500 rounded-full text-xs font-medium">Offline</span>';
 
             card.innerHTML = `
-                <h3 class="text-base lg:text-lg font-semibold text-gray-800">${bus.bus_no}</h3>
+                <div class="flex justify-between items-start">
+                    <h3 class="text-base lg:text-lg font-semibold text-gray-800">${bus.bus_no}</h3>
+                    ${statusBadge}
+                </div>
                 <p class="text-sm text-gray-600 mt-1"><span class="font-medium">Route:</span> ${bus.route}</p>
                 <button class="mt-3 px-4 py-2 bg-blue-600 text-white rounded-lg text-sm hover:bg-blue-700">
                     View Location
@@ -227,5 +264,100 @@
             map.invalidateSize();
         }, 200);
     });
+
+    // =====================================================================
+    //  LIVE POLLING — Fetch updated bus positions every 5 seconds
+    // =====================================================================
+
+    const POLL_INTERVAL_MS = 5000;
+    const POLL_URL = "{% url 'bus_locations_api' %}";
+
+    /**
+     * Format an ISO timestamp into a human-friendly "X seconds/minutes ago" string.
+     */
+    function timeAgo(isoString) {
+        if (!isoString) return "No GPS data";
+        const diff = Math.floor((Date.now() - new Date(isoString).getTime()) / 1000);
+        if (diff < 10) return "Just now";
+        if (diff < 60) return diff + "s ago";
+        if (diff < 3600) return Math.floor(diff / 60) + "m ago";
+        return Math.floor(diff / 3600) + "h ago";
+    }
+
+    /**
+     * Poll the server for updated bus locations and move markers.
+     */
+    function pollBusLocations() {
+        fetch(POLL_URL)
+            .then(response => {
+                if (!response.ok) throw new Error("Poll failed");
+                return response.json();
+            })
+            .then(updatedBuses => {
+                updatedBuses.forEach(bus => {
+                    const marker = markers[bus.id];
+                    if (!marker) return;  // Bus wasn't on the initial page load
+
+                    // ── Move the marker to the new position ──
+                    marker.setLatLng([bus.lat, bus.lng]);
+
+                    // ── Update marker style based on active/offline ──
+                    if (bus.is_active) {
+                        marker.setIcon(busIcon);
+                        marker.setOpacity(1.0);
+                    } else {
+                        marker.setIcon(offlineIcon);
+                        marker.setOpacity(0.5);
+                    }
+
+                    // ── Update the popup content ──
+                    const statusLabel = bus.is_active
+                        ? '<span style="color:green;font-weight:bold;">● Active</span>'
+                        : '<span style="color:gray;">○ Offline</span>';
+
+                    const lastUpdated = bus.is_active && bus.last_updated
+                        ? '<p style="font-size:12px;color:#888;">📡 ' + timeAgo(bus.last_updated) + '</p>'
+                        : '';
+
+                    marker.setPopupContent(`
+                        <div style="min-width:180px">
+                            <h3 style="font-weight:bold;">${bus.bus_no}</h3>
+                            <p>Route: ${bus.route}</p>
+                            <p>${statusLabel}</p>
+                            ${lastUpdated}
+                        </div>
+                    `);
+
+                    // ── Update the bus card in the sidebar ──
+                    const cards = busList.querySelectorAll("div.rounded-xl");
+                    // Match by index (buses are rendered in the same order)
+                    const idx = updatedBuses.indexOf(bus);
+                    if (cards[idx]) {
+                        const card = cards[idx];
+                        card.style.opacity = bus.is_active ? "1" : "0.45";
+
+                        const badge = card.querySelector("span.inline-block");
+                        if (badge) {
+                            if (bus.is_active) {
+                                badge.className = "inline-block px-2 py-0.5 bg-green-100 text-green-700 rounded-full text-xs font-medium";
+                                badge.textContent = "Active";
+                            } else {
+                                badge.className = "inline-block px-2 py-0.5 bg-gray-100 text-gray-500 rounded-full text-xs font-medium";
+                                badge.textContent = "Offline";
+                            }
+                        }
+                    }
+                });
+            })
+            .catch(() => {
+                // Silently retry on next interval — don't break the UI
+            });
+    }
+
+    // Start polling after a short delay to let the page settle
+    setTimeout(() => {
+        setInterval(pollBusLocations, POLL_INTERVAL_MS);
+    }, POLL_INTERVAL_MS);
+
 </script>
 {% endblock %} 

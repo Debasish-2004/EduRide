@@ -1,0 +1,212 @@
+{% extends "driver_layout.html" %}
+{% block title %}Driver Dashboard{% endblock title %}
+
+{% block content %}
+<div class="max-w-4xl mx-auto py-10 px-4">
+
+    <div class="bg-white rounded-2xl shadow-md p-8 border border-gray-200">
+        <div class="mb-6">
+            <h1 class="text-3xl font-bold text-gray-800">Welcome, {{ request.user.username }}!</h1>
+            <p class="text-gray-500 mt-2">Your driver dashboard</p>
+        </div>
+
+        {% if messages %}
+        {% for message in messages %}
+        <div class="mb-4 px-4 py-3 rounded-lg text-sm
+                    {% if message.tags == 'error' %}
+                        bg-red-100 text-red-700
+                    {% elif message.tags == 'success' %}
+                        bg-green-100 text-green-700
+                    {% else %}
+                        bg-gray-100 text-gray-700
+                    {% endif %}
+                ">
+            {{ message }}
+        </div>
+        {% endfor %}
+        {% endif %}
+
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <!-- Active Route Card -->
+            <div class="bg-emerald-50 border border-emerald-200 rounded-xl p-6">
+                <div class="flex items-center gap-3 mb-3">
+                    <span class="text-2xl">🚌</span>
+                    <h2 class="text-lg font-semibold text-emerald-800">Assigned Route</h2>
+                </div>
+
+                {% if route %}
+                <div class="space-y-2">
+                    <p class="text-gray-700">
+                        <span class="font-medium">Bus No:</span> {{ route.bus_no }}
+                    </p>
+                    <p class="text-gray-700">
+                        <span class="font-medium">Route:</span> {{ route.route_name }}
+                    </p>
+                </div>
+                {% else %}
+                <p class="text-gray-600">No route assigned yet. Please contact your institute admin.</p>
+                {% endif %}
+            </div>
+
+            <!-- Status Card -->
+            <div class="bg-blue-50 border border-blue-200 rounded-xl p-6">
+                <div class="flex items-center gap-3 mb-3">
+                    <span class="text-2xl">📍</span>
+                    <h2 class="text-lg font-semibold text-blue-800">Trip Status</h2>
+                </div>
+
+                {% if route %}
+                {% if route.is_active %}
+                <p class="text-gray-600 mb-4">
+                    <span class="inline-block px-3 py-1 bg-green-100 text-green-700 rounded-full text-sm font-medium">
+                        🟢 Trip Active
+                    </span>
+                </p>
+                <form action="{% url 'toggle_trip' %}" method="POST">
+                    {% csrf_token %}
+                    <button type="submit"
+                        class="w-full px-4 py-2 bg-red-500 text-white rounded-lg hover:bg-red-600 transition font-medium"
+                        onclick="return confirm('Are you sure you want to end this trip?');">
+                        🛑 End Trip
+                    </button>
+                </form>
+                {% else %}
+                <p class="text-gray-600 mb-4">
+                    <span class="inline-block px-3 py-1 bg-gray-100 text-gray-500 rounded-full text-sm font-medium">
+                        ⚪ Offline
+                    </span>
+                </p>
+                <form action="{% url 'toggle_trip' %}" method="POST">
+                    {% csrf_token %}
+                    <button type="submit"
+                        class="w-full px-4 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 transition font-medium">
+                        🚀 Start Trip
+                    </button>
+                </form>
+                {% endif %}
+                {% else %}
+                <p class="text-gray-600">
+                    <span class="inline-block px-3 py-1 bg-gray-100 text-gray-500 rounded-full text-sm font-medium">
+                        No route assigned
+                    </span>
+                </p>
+                {% endif %}
+            </div>
+        </div>
+
+        {% if route and route.is_active %}
+        <!-- GPS Location Sharing Card (only visible when trip is active) -->
+        <div class="mt-6 bg-amber-50 border border-amber-200 rounded-xl p-6">
+            <div class="flex items-center gap-3 mb-3">
+                <span class="text-2xl">📡</span>
+                <h2 class="text-lg font-semibold text-amber-800">Live Location Sharing</h2>
+            </div>
+            <p class="text-gray-700 text-sm" id="gps-status">
+                Initializing GPS...
+            </p>
+        </div>
+        {% endif %}
+
+    </div>
+
+</div>
+
+{% if route and route.is_active %}
+<script>
+(function () {
+    // ── Configuration ──
+    const SEND_INTERVAL_MS = 5000;  // Send location every 5 seconds
+    const UPDATE_URL = "{% url 'update_location' %}";
+    const CSRF_TOKEN = "{{ csrf_token }}";
+
+    const statusEl = document.getElementById("gps-status");
+
+    // Check browser support
+    if (!navigator.geolocation) {
+        statusEl.textContent = "❌ Your browser does not support GPS. Location sharing is unavailable.";
+        statusEl.classList.add("text-red-600");
+        return;
+    }
+
+    let lastLat = null;
+    let lastLng = null;
+    let sendCount = 0;
+
+    // ── Send coordinates to server ──
+    function sendLocation(lat, lng) {
+        fetch(UPDATE_URL, {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/json",
+                "X-CSRFToken": CSRF_TOKEN,
+            },
+            body: JSON.stringify({ latitude: lat, longitude: lng }),
+        })
+        .then(function (response) {
+            if (response.ok) {
+                sendCount++;
+                statusEl.innerHTML = '🟢 <span class="font-medium">Sharing location</span> — '
+                    + 'Lat: ' + lat.toFixed(5) + ', Lng: ' + lng.toFixed(5)
+                    + ' <span class="text-gray-400">(update #' + sendCount + ')</span>';
+                statusEl.className = "text-gray-700 text-sm";
+            } else {
+                statusEl.textContent = "⚠️ Server rejected location update. Will retry...";
+                statusEl.className = "text-amber-600 text-sm";
+            }
+        })
+        .catch(function () {
+            statusEl.textContent = "⚠️ Network error. Will retry...";
+            statusEl.className = "text-amber-600 text-sm";
+        });
+    }
+
+    // ── Watch the device's GPS position ──
+    const watchId = navigator.geolocation.watchPosition(
+        function (position) {
+            lastLat = position.coords.latitude;
+            lastLng = position.coords.longitude;
+        },
+        function (error) {
+            if (error.code === error.PERMISSION_DENIED) {
+                statusEl.textContent = "❌ Location permission denied. Please allow location access in your browser settings.";
+            } else {
+                statusEl.textContent = "⚠️ GPS error: " + error.message + ". Retrying...";
+            }
+            statusEl.className = "text-red-600 text-sm";
+        },
+        {
+            enableHighAccuracy: true,
+            timeout: 15000,
+            maximumAge: 0,
+        }
+    );
+
+    // ── Send location to server every 5 seconds ──
+    const intervalId = setInterval(function () {
+        if (lastLat !== null && lastLng !== null) {
+            sendLocation(lastLat, lastLng);
+        }
+    }, SEND_INTERVAL_MS);
+
+    // Send immediately once GPS is available (don't wait 5 seconds)
+    navigator.geolocation.getCurrentPosition(
+        function (position) {
+            lastLat = position.coords.latitude;
+            lastLng = position.coords.longitude;
+            sendLocation(lastLat, lastLng);
+        },
+        function () {
+            // Handled by watchPosition error callback above
+        },
+        { enableHighAccuracy: true, timeout: 15000 }
+    );
+
+    // Clean up when page is unloaded
+    window.addEventListener("beforeunload", function () {
+        navigator.geolocation.clearWatch(watchId);
+        clearInterval(intervalId);
+    });
+})();
+</script>
+{% endif %}
+{% endblock content %}

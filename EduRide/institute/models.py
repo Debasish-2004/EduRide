@@ -1,6 +1,7 @@
 from django.core.exceptions import ValidationError
 from django.db import models
 from django.db.models.functions import Lower
+from django.contrib.auth.models import User
 
 # Create your models here.
 
@@ -9,6 +10,28 @@ class Route(models.Model):
     route_name = models.CharField(max_length=100)
     coordinates = models.JSONField()
     waypoints = models.JSONField()
+
+    # Which driver is assigned to this bus. null=True means "unassigned".
+    # unique=True ensures one driver can only be assigned to one route.
+    # related_name="assigned_route" lets you do: user.assigned_route to get the route.
+    driver = models.OneToOneField(
+        User,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="assigned_route",
+        limit_choices_to={"profile__role": "driver"},
+    )
+
+    # Is the bus currently running on the road?
+    # Only the assigned driver can toggle this.
+    is_active = models.BooleanField(default=False)
+
+    # ── Live GPS location (updated by the driver's browser every ~5 seconds) ──
+    # These are NULL when the bus is offline or no GPS data has been sent yet.
+    live_latitude = models.FloatField(null=True, blank=True)
+    live_longitude = models.FloatField(null=True, blank=True)
+    location_updated_at = models.DateTimeField(null=True, blank=True)
 
     class Meta:
         constraints = [
