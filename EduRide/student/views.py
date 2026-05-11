@@ -1,7 +1,7 @@
 from django.shortcuts import render, redirect
 from django.db import transaction
 from django.http import JsonResponse
-from institute.models import Route
+from institute.models import Institute, Route
 from django.views.decorators.http import require_POST
 from django.contrib.auth.password_validation import validate_password
 from django.core.exceptions import ValidationError
@@ -36,7 +36,9 @@ def _safe_coord(coordinates, index, default):
 # NEW: @student_required only allows users with UserProfile.role == "student".
 @student_required
 def home(request):
-    routes = Route.objects.all()
+    # Scope to the student's institute only.
+    institute = request.user.profile.institute
+    routes = Route.objects.filter(institute=institute)
 
     buses = []
     for route in routes:
@@ -52,6 +54,7 @@ def home(request):
 
     return render(request, "index.html", {
         "buses": buses,
+        "institute": institute,
     })
 
 
@@ -64,8 +67,10 @@ def bus_locations_api(request):
     """
     Returns JSON with all buses and their current live positions.
     The student's JavaScript polls this endpoint to update map markers.
+    Scoped to the student's institute.
     """
-    routes = Route.objects.all()
+    institute = request.user.profile.institute
+    routes = Route.objects.filter(institute=institute)
 
     buses = []
     for route in routes:
@@ -130,21 +135,34 @@ def student_signin(request):
 
 
 # ---------------------------------------------------------------------------
-#  Student Sign Up (creates User + UserProfile)
+#  Student Sign Up (creates User + UserProfile linked to an Institute)
 # ---------------------------------------------------------------------------
 
 def student_signup(request):
     if request.method == "POST":
         username = request.POST.get("username")
         email = request.POST.get("email")
+        institute_code = request.POST.get("institute_code", "").strip().upper()
         password1 = request.POST.get("password1")
         password2 = request.POST.get("password2")
 
         # --- Validation checks ---
 
         # Check that no fields are empty.
-        if not username or not email or not password1 or not password2:
+        if not username or not email or not password1 or not password2 or not institute_code:
             messages.error(request, "All fields are required.")
+            return redirect("student_signup")
+
+        # Validate institute code.
+        try:
+            institute = Institute.objects.get(institute_code=institute_code)
+        except Institute.DoesNotExist:
+            messages.error(request, "Invalid institute code. Please check with your institute.")
+            return redirect("student_signup")
+
+        # Institute must have paid before students can join.
+        if not institute.has_paid:
+            messages.error(request, "This institute has not been activated yet. Please ask your institute admin to complete payment first.")
             return redirect("student_signup")
 
         # Password confirmation check.
@@ -184,11 +202,12 @@ def student_signup(request):
                 password=password1
             )
 
-            # Create a UserProfile with role="student".
-            # This is how Django knows this user is a student.
-            # Without this, the user would not have a profile, and
-            # @student_required would block them.
-            UserProfile.objects.create(user=user, role="student")
+            # Create a UserProfile with role="student" linked to the institute.
+            UserProfile.objects.create(
+                user=user,
+                role="student",
+                institute=institute,
+            )
 
         messages.success(request, "Account created successfully! Please login.")
         return redirect("student_signin")

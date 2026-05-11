@@ -39,6 +39,10 @@
         <form method="POST" class="space-y-4">
             {% csrf_token %}
 
+            <input type="text" name="institute_code" placeholder="Institute Code (e.g. EDU-A3X7K2)" required
+                class="w-full px-4 py-3 border rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500 font-mono tracking-wider uppercase"
+                style="letter-spacing: 0.1em;">
+
             <input type="text" name="username" placeholder="Username" required
                 class="w-full px-4 py-3 border rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500">
 

@@ -124,6 +124,36 @@ def institute_required(view_func):
     return _role_required("institute_admin", "institute_signin")(view_func)
 
 
+def payment_required(view_func):
+    """
+    Decorator for institute views that require the institute to have paid.
+
+    MUST be used AFTER @institute_required, like this:
+        @institute_required
+        @payment_required
+        def buslist(request):
+            ...
+
+    This ensures:
+    1. User is logged in and is an institute_admin (checked by @institute_required).
+    2. The institute has completed payment (checked by this decorator).
+
+    If the institute has NOT paid, the user is redirected to the payment page.
+    """
+
+    @wraps(view_func)
+    def wrapper(request, *args, **kwargs):
+        # At this point, @institute_required has already verified the user
+        # is an authenticated institute_admin.  We just need to check payment.
+        institute = request.user.institute  # via Institute.admin OneToOneField
+        if not institute.has_paid:
+            return redirect("institute_payment")
+
+        return view_func(request, *args, **kwargs)
+
+    return wrapper
+
+
 def driver_required(view_func):
     """
     Only allows users with role="driver" to access the view.

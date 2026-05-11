@@ -1,93 +1,271 @@
 {% extends "institute_layout.html" %}
-{% block title %}institute{% endblock title %}
+{% block title %}Dashboard — {{ institute.name }}{% endblock title %}
 {% block head %}
-<link
-rel="stylesheet"
-href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
-/>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
 <style>
-    #map {
-        width: 100%;
-        min-height: 75vh;
-        height: calc(100% - 80px);
-    }
-    #admin_map{
-        width: 90vw;
-        height:77vh;
-        margin:auto;
-        border:5px solid black;
-        border-radius:30px;
-    }
+    #map { width:100%; height:100%; min-height:350px; }
+    /* Stat card entrance animation */
+    .stat-card { animation: slideUp .45s ease-out both; }
+    .stat-card:nth-child(2){ animation-delay:.07s }
+    .stat-card:nth-child(3){ animation-delay:.14s }
+    .stat-card:nth-child(4){ animation-delay:.21s }
+    .stat-card:nth-child(5){ animation-delay:.28s }
+    .stat-card:nth-child(6){ animation-delay:.35s }
+    @keyframes slideUp { from { opacity:0; transform:translateY(18px) } to { opacity:1; transform:translateY(0) } }
+    /* Tab system */
+    .tab-btn { transition: all .2s; }
+    .tab-btn.active { color:#2563eb; border-color:#2563eb; background:#eff6ff; }
+    .tab-panel { display:none; animation: fadeIn .25s ease; }
+    .tab-panel.active { display:block; }
+    @keyframes fadeIn { from { opacity:0 } to { opacity:1 } }
+    /* Table rows */
+    .data-row { transition: background .15s; }
+    .data-row:hover { background:#f8fafc; }
 </style>
 {% endblock head %}
 
 {% block content %}
 
- <div id="admin_map">
-    <div class="h-full overflow-hidden border-[3px] border-gray-900 rounded-2xl">
-        <div id="map" class="w-full h-full"></div>
+<!-- Institute Code Banner -->
+<div class="bg-gradient-to-r from-blue-600 to-indigo-700 text-white px-4 py-5">
+    <div class="max-w-7xl mx-auto flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+        <div>
+            <h2 class="text-2xl font-bold">{{ institute.name }}</h2>
+            <p class="text-blue-100 text-sm mt-1">Institute Dashboard · Share the code below with drivers &amp; students</p>
+        </div>
+        <div class="flex items-center gap-3">
+            <span class="px-5 py-2.5 bg-white/15 backdrop-blur rounded-xl border border-white/30 font-mono text-xl font-bold tracking-[.25em] select-all">
+                {{ institute.institute_code }}
+            </span>
+            <button onclick="navigator.clipboard.writeText('{{ institute.institute_code }}'); this.textContent='Copied!'; setTimeout(()=>this.textContent='Copy',1500);"
+                class="px-4 py-2.5 text-sm bg-white text-blue-700 font-semibold rounded-xl hover:bg-blue-50 transition shadow">
+                Copy
+            </button>
+        </div>
     </div>
 </div>
-<!--for the bus locations-->
+
+<!-- Flash Messages -->
+{% if messages %}
+<div class="max-w-7xl mx-auto px-4 mt-4">
+    {% for message in messages %}
+    <div class="mb-2 px-4 py-3 rounded-lg text-sm {% if message.tags == 'error' %}bg-red-100 text-red-700{% elif message.tags == 'success' %}bg-green-100 text-green-700{% else %}bg-gray-100 text-gray-700{% endif %}">
+        {{ message }}
+    </div>
+    {% endfor %}
+</div>
+{% endif %}
+
+<!-- ══════════ STAT CARDS ══════════ -->
+<div class="max-w-7xl mx-auto px-4 py-6">
+    <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
+
+        <!-- Total Buses -->
+        <div class="stat-card bg-white rounded-2xl shadow-sm border border-gray-100 p-5 hover:shadow-md transition-shadow">
+            <div class="w-10 h-10 rounded-xl bg-blue-100 flex items-center justify-center mb-3">
+                <svg class="w-5 h-5 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7h8m-8 4h4m-2 5v2m4-2v2M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg>
+            </div>
+            <p class="text-3xl font-extrabold text-gray-900">{{ total_buses }}</p>
+            <p class="text-xs font-medium text-gray-500 mt-1 uppercase tracking-wide">Total Buses</p>
+        </div>
+
+        <!-- Active -->
+        <div class="stat-card bg-white rounded-2xl shadow-sm border border-gray-100 p-5 hover:shadow-md transition-shadow">
+            <div class="w-10 h-10 rounded-xl bg-green-100 flex items-center justify-center mb-3">
+                <span class="relative flex h-3 w-3"><span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"></span><span class="relative inline-flex rounded-full h-3 w-3 bg-green-500"></span></span>
+            </div>
+            <p class="text-3xl font-extrabold text-gray-900">{{ active_buses }}</p>
+            <p class="text-xs font-medium text-gray-500 mt-1 uppercase tracking-wide">Active Buses</p>
+        </div>
+
+        <!-- Inactive -->
+        <div class="stat-card bg-white rounded-2xl shadow-sm border border-gray-100 p-5 hover:shadow-md transition-shadow">
+            <div class="w-10 h-10 rounded-xl bg-gray-100 flex items-center justify-center mb-3">
+                <svg class="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M18.364 5.636a9 9 0 11-12.728 0M12 9v4"/></svg>
+            </div>
+            <p class="text-3xl font-extrabold text-gray-900">{{ inactive_buses }}</p>
+            <p class="text-xs font-medium text-gray-500 mt-1 uppercase tracking-wide">Inactive Buses</p>
+        </div>
+
+        <!-- Total Drivers -->
+        <div class="stat-card bg-white rounded-2xl shadow-sm border border-gray-100 p-5 hover:shadow-md transition-shadow">
+            <div class="w-10 h-10 rounded-xl bg-amber-100 flex items-center justify-center mb-3">
+                <svg class="w-5 h-5 text-amber-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5.121 17.804A13.937 13.937 0 0112 16c2.5 0 4.847.655 6.879 1.804M15 10a3 3 0 11-6 0 3 3 0 016 0z"/></svg>
+            </div>
+            <p class="text-3xl font-extrabold text-gray-900">{{ total_drivers }}</p>
+            <p class="text-xs font-medium text-gray-500 mt-1 uppercase tracking-wide">Total Drivers</p>
+        </div>
+
+        <!-- Total Students -->
+        <div class="stat-card bg-white rounded-2xl shadow-sm border border-gray-100 p-5 hover:shadow-md transition-shadow">
+            <div class="w-10 h-10 rounded-xl bg-purple-100 flex items-center justify-center mb-3">
+                <svg class="w-5 h-5 text-purple-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197"/></svg>
+            </div>
+            <p class="text-3xl font-extrabold text-gray-900">{{ total_students }}</p>
+            <p class="text-xs font-medium text-gray-500 mt-1 uppercase tracking-wide">Total Students</p>
+        </div>
+
+        <!-- Unassigned -->
+        <div class="stat-card bg-white rounded-2xl shadow-sm border border-gray-100 p-5 hover:shadow-md transition-shadow">
+            <div class="w-10 h-10 rounded-xl bg-red-100 flex items-center justify-center mb-3">
+                <svg class="w-5 h-5 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01M12 3a9 9 0 100 18 9 9 0 000-18z"/></svg>
+            </div>
+            <p class="text-3xl font-extrabold text-gray-900">{{ drivers_without_bus.count }}</p>
+            <p class="text-xs font-medium text-gray-500 mt-1 uppercase tracking-wide">Unassigned Drivers</p>
+        </div>
+
+    </div>
+</div>
+
+<!-- ══════════ ALERTS: Unassigned ══════════ -->
+<div class="max-w-7xl mx-auto px-4 space-y-3 mb-6">
+    {% if drivers_without_bus %}
+    <div class="flex items-start gap-3 bg-amber-50 border border-amber-200 rounded-xl px-5 py-4">
+        <svg class="w-5 h-5 text-amber-500 mt-0.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01M12 3a9 9 0 100 18 9 9 0 000-18z"/></svg>
+        <div>
+            <p class="text-sm font-semibold text-amber-800">Drivers without a bus</p>
+            <p class="text-sm text-amber-700 mt-1">
+                {% for d in drivers_without_bus %}{{ d.username }}{% if not forloop.last %}, {% endif %}{% endfor %}
+                — <a href="{% url 'buslist' %}" class="underline font-medium">Assign them here</a>
+            </p>
+        </div>
+    </div>
+    {% endif %}
+
+    {% if buses_without_driver %}
+    <div class="flex items-start gap-3 bg-red-50 border border-red-200 rounded-xl px-5 py-4">
+        <svg class="w-5 h-5 text-red-500 mt-0.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01M12 3a9 9 0 100 18 9 9 0 000-18z"/></svg>
+        <div>
+            <p class="text-sm font-semibold text-red-800">Buses without a driver</p>
+            <p class="text-sm text-red-700 mt-1">
+                {% for b in buses_without_driver %}{{ b.bus_no }}{% if not forloop.last %}, {% endif %}{% endfor %}
+                — <a href="{% url 'buslist' %}" class="underline font-medium">Assign drivers here</a>
+            </p>
+        </div>
+    </div>
+    {% endif %}
+</div>
+
+<!-- ══════════ MAP + LISTS (tabbed) ══════════ -->
+<div class="max-w-7xl mx-auto px-4 pb-10">
+    <div class="grid grid-cols-1 lg:grid-cols-5 gap-6">
+
+        <!-- MAP (left 3 cols) -->
+        <div class="lg:col-span-3 bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
+            <div class="px-5 py-4 border-b border-gray-100 flex items-center justify-between">
+                <h3 class="font-bold text-gray-800 text-lg">Live Bus Map</h3>
+                <span class="text-xs text-gray-400">{{ total_buses }} buses</span>
+            </div>
+            <div class="h-[420px]">
+                <div id="map"></div>
+            </div>
+        </div>
+
+        <!-- TABS (right 2 cols) -->
+        <div class="lg:col-span-2 bg-white rounded-2xl shadow-sm border border-gray-100 flex flex-col max-h-[500px]">
+            <!-- Tab buttons -->
+            <div class="flex border-b border-gray-100">
+                <button onclick="switchTab('students')" id="tab-students" class="tab-btn active flex-1 px-4 py-3.5 text-sm font-semibold border-b-2 border-transparent">
+                    Students <span class="ml-1 text-xs bg-purple-100 text-purple-700 px-2 py-0.5 rounded-full">{{ total_students }}</span>
+                </button>
+                <button onclick="switchTab('drivers')" id="tab-drivers" class="tab-btn flex-1 px-4 py-3.5 text-sm font-semibold border-b-2 border-transparent">
+                    Drivers <span class="ml-1 text-xs bg-amber-100 text-amber-700 px-2 py-0.5 rounded-full">{{ total_drivers }}</span>
+                </button>
+            </div>
+
+            <!-- Students Panel -->
+            <div id="panel-students" class="tab-panel active flex-1 overflow-y-auto">
+                {% for s in students %}
+                <div class="data-row flex items-center justify-between px-5 py-3 border-b border-gray-50">
+                    <div class="flex items-center gap-3 min-w-0">
+                        <div class="w-8 h-8 rounded-full bg-purple-100 flex items-center justify-center flex-shrink-0">
+                            <span class="text-sm font-bold text-purple-600">{{ s.username|make_list|first|upper }}</span>
+                        </div>
+                        <div class="min-w-0">
+                            <p class="text-sm font-medium text-gray-800 truncate">{{ s.username }}</p>
+                            <p class="text-xs text-gray-400 truncate">{{ s.email }}</p>
+                        </div>
+                    </div>
+                    <form action="{% url 'remove_student' s.id %}" method="POST" onsubmit="return confirm('Remove student {{ s.username|escapejs }}? This action cannot be undone.');">
+                        {% csrf_token %}
+                        <button type="submit" class="text-xs px-3 py-1.5 rounded-lg bg-red-50 text-red-600 hover:bg-red-100 transition font-medium">Remove</button>
+                    </form>
+                </div>
+                {% empty %}
+                <div class="flex flex-col items-center justify-center py-12 text-gray-400">
+                    <svg class="w-10 h-10 mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z"/></svg>
+                    <p class="text-sm">No students yet</p>
+                </div>
+                {% endfor %}
+            </div>
+
+            <!-- Drivers Panel -->
+            <div id="panel-drivers" class="tab-panel flex-1 overflow-y-auto">
+                {% for d in drivers %}
+                <div class="data-row flex items-center justify-between px-5 py-3 border-b border-gray-50">
+                    <div class="flex items-center gap-3 min-w-0">
+                        <div class="w-8 h-8 rounded-full bg-amber-100 flex items-center justify-center flex-shrink-0">
+                            <span class="text-sm font-bold text-amber-600">{{ d.username|make_list|first|upper }}</span>
+                        </div>
+                        <div class="min-w-0">
+                            <p class="text-sm font-medium text-gray-800 truncate">{{ d.username }}</p>
+                            <p class="text-xs text-gray-400 truncate">{{ d.email }}</p>
+                        </div>
+                    </div>
+                    <div class="flex items-center gap-2">
+                        {% if d.id in drivers_without_bus_ids %}
+                        <span class="text-[10px] px-2 py-0.5 rounded-full bg-amber-100 text-amber-700 font-medium">No bus</span>
+                        {% endif %}
+                        <form action="{% url 'remove_driver' d.id %}" method="POST" onsubmit="return confirm('Remove driver {{ d.username|escapejs }}? This action cannot be undone.');">
+                            {% csrf_token %}
+                            <button type="submit" class="text-xs px-3 py-1.5 rounded-lg bg-red-50 text-red-600 hover:bg-red-100 transition font-medium">Remove</button>
+                        </form>
+                    </div>
+                </div>
+                {% empty %}
+                <div class="flex flex-col items-center justify-center py-12 text-gray-400">
+                    <svg class="w-10 h-10 mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M5.121 17.804A13.937 13.937 0 0112 16c2.5 0 4.847.655 6.879 1.804M15 10a3 3 0 11-6 0 3 3 0 016 0z"/></svg>
+                    <p class="text-sm">No drivers yet</p>
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+
+    </div>
+</div>
+
+<!-- Bus data for map -->
 {{ buses|json_script:"buses-data" }}
 
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-
 <script>
-const buses = JSON.parse(document.getElementById("buses-data").textContent);
+// ── Tab switching ──
+function switchTab(tab) {
+    document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+    document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
+    document.getElementById('tab-' + tab).classList.add('active');
+    document.getElementById('panel-' + tab).classList.add('active');
+}
 
+// ── Leaflet Map ──
+const buses = JSON.parse(document.getElementById("buses-data").textContent);
 const map = L.map('map').setView([20.2961, 85.8245], 11);
 
-// Map Layers
-const streetLayer = L.tileLayer(
-'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
-{ attribution: '&copy; OpenStreetMap contributors' }
-);
+L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    attribution: '&copy; OpenStreetMap contributors'
+}).addTo(map);
 
-const darkLayer = L.tileLayer(
-'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png',
-{ attribution: '&copy; OpenStreetMap & CARTO' }
-);
-
-const baseLayers = {
-    "Street": streetLayer,
-    "Dark": darkLayer
-};
-
-streetLayer.addTo(map);
-
-L.control.layers(baseLayers).addTo(map);
-
-// Bus markers
-const markers = {};
+L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
+    attribution: '&copy; OpenStreetMap & CARTO'
+});
 
 buses.forEach(bus => {
-
-    const marker = L.marker([bus.lat, bus.lng])
-    .addTo(map)
-    .bindPopup(`
-        <div style="min-width:180px">
-            <h3 style="font-weight:bold;">${bus.bus_no}</h3>
-            <p>Route: ${bus.route}</p>
-        </div>
-    `);
-
-    markers[bus.id] = marker;
-
+    L.marker([bus.lat, bus.lng]).addTo(map)
+        .bindPopup(`<div style="min-width:160px"><h3 style="font-weight:bold">${bus.bus_no}</h3><p>Route: ${bus.route}</p></div>`);
 });
 
-window.addEventListener("load", () => {
-    setTimeout(() => {
-        map.invalidateSize();
-    }, 200);
-});
-
-window.addEventListener("resize", () => {
-    setTimeout(() => {
-        map.invalidateSize();
-    }, 200);
-});
-
+window.addEventListener("load", () => setTimeout(() => map.invalidateSize(), 300));
+window.addEventListener("resize", () => setTimeout(() => map.invalidateSize(), 200));
 </script>
 
 {% endblock content %}

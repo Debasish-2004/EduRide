@@ -15,7 +15,7 @@ from django.contrib import messages
 from django.contrib.auth.models import User
 
 from student.models import UserProfile
-from institute.models import Route
+from institute.models import Institute, Route
 
 
 # ---------------------------------------------------------------------------
@@ -147,13 +147,26 @@ def driver_signup(request):
     if request.method == "POST":
         username = request.POST.get("username")
         email = request.POST.get("email")
+        institute_code = request.POST.get("institute_code", "").strip().upper()
         password1 = request.POST.get("password1")
         password2 = request.POST.get("password2")
 
         # --- Validation checks ---
 
-        if not username or not email or not password1 or not password2:
+        if not username or not email or not password1 or not password2 or not institute_code:
             messages.error(request, "All fields are required.")
+            return redirect("driver_signup")
+
+        # Validate institute code.
+        try:
+            institute = Institute.objects.get(institute_code=institute_code)
+        except Institute.DoesNotExist:
+            messages.error(request, "Invalid institute code. Please check with your institute.")
+            return redirect("driver_signup")
+
+        # Institute must have paid before drivers can join.
+        if not institute.has_paid:
+            messages.error(request, "This institute has not been activated yet. Please ask your institute admin to complete payment first.")
             return redirect("driver_signup")
 
         if password1 != password2:
@@ -189,8 +202,12 @@ def driver_signup(request):
                 password=password1,
             )
 
-            # Create a UserProfile with role="driver".
-            UserProfile.objects.create(user=user, role="driver")
+            # Create a UserProfile with role="driver" linked to the institute.
+            UserProfile.objects.create(
+                user=user,
+                role="driver",
+                institute=institute,
+            )
 
         messages.success(request, "Driver account created successfully! Please login.")
         return redirect("driver_signin")

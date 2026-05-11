@@ -129,3 +129,17 @@ USE_TZ = True
 # https://docs.djangoproject.com/en/6.0/howto/static-files/
 
 STATIC_URL = 'static/'
+
+
+# ---------------------------------------------------------------------------
+#  Razorpay Configuration (Test Mode)
+# ---------------------------------------------------------------------------
+# Set these environment variables before running the server:
+#   export RAZORPAY_KEY_ID="rzp_test_..."
+#   export RAZORPAY_KEY_SECRET="your_key_secret_here"
+#
+# In test mode, use card number 4111 1111 1111 1111 with any future
+# expiry and any CVV to simulate a successful payment.
+
+RAZORPAY_KEY_ID = os.environ.get("RAZORPAY_KEY_ID", "rzp_test_SnBKCBXLfuMnsd")
+RAZORPAY_KEY_SECRET = os.environ.get("RAZORPAY_KEY_SECRET", "vvk4K1vR625eTCyB2ZmO2RrI")

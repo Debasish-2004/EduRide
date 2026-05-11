@@ -52,6 +52,19 @@ class UserProfile(models.Model):
         default="student",
     )
 
+    # Which institute this user belongs to.
+    # - For institute_admin: linked via Institute.admin (OneToOneField), NOT here.
+    #   This field is NULL for institute admins.
+    # - For students and drivers: this is REQUIRED.
+    #   They provide an institute code during signup, and we look up the Institute.
+    institute = models.ForeignKey(
+        "institute.Institute",
+        on_delete=models.CASCADE,
+        null=True,
+        blank=True,
+        related_name="members",
+    )
+
     def __str__(self):
         # This controls what is displayed in Django admin and the shell.
         # Example output: "john_doe (student)"
