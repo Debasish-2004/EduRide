@@ -397,13 +397,16 @@ def verify_payment(request):
         hashlib.sha256,
     ).hexdigest()
 
-    if generated_signature != razorpay_signature:
+    # Use constant-time comparison to prevent timing attacks.
+    if not hmac.compare_digest(generated_signature, razorpay_signature):
         messages.error(request, "Payment verification failed: invalid signature.")
         return redirect("institute_payment")
 
-    # Payment verified! Mark the institute as paid.
+    # Payment verified! Mark the institute as paid and store the payment ID
+    # for future reference (refunds, support tickets, audit trail).
     institute.has_paid = True
-    institute.save(update_fields=["has_paid"])
+    institute.razorpay_payment_id = razorpay_payment_id
+    institute.save(update_fields=["has_paid", "razorpay_payment_id"])
 
     messages.success(request, "Payment successful! You can now manage buses.")
     return redirect("institute_admin")
