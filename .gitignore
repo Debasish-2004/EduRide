@@ -11,3 +11,5 @@ venv/
 
 # Django
 db.sqlite3
+
+.env
