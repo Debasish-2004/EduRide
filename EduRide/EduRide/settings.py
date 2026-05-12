@@ -9,13 +9,9 @@ https://docs.djangoproject.com/en/6.0/topics/settings/
 For the full list of settings and their values, see
 https://docs.djangoproject.com/en/6.0/ref/settings/
 """
-
+from dotenv import load_dotenv
 import os
 from pathlib import Path
-
-# Load environment variables from .env file (if it exists).
-from dotenv import load_dotenv
-load_dotenv(Path(__file__).resolve().parent.parent / ".env")
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -138,15 +134,13 @@ STATIC_URL = 'static/'
 # ---------------------------------------------------------------------------
 #  Razorpay Configuration (Test Mode)
 # ---------------------------------------------------------------------------
-# Set these environment variables before running the server, or add them
-# to the .env file (requires python-dotenv):
-#   RAZORPAY_KEY_ID=rzp_test_...
-#   RAZORPAY_KEY_SECRET=your_key_secret_here
+# Set these environment variables before running the server:
+#   export RAZORPAY_KEY_ID="rzp_test_..."
+#   export RAZORPAY_KEY_SECRET="your_key_secret_here"
 #
 # In test mode, use card number 4111 1111 1111 1111 with any future
 # expiry and any CVV to simulate a successful payment.
-#
-# IMPORTANT: Never hardcode the Key Secret in source code.
+load_dotenv()
 
-RAZORPAY_KEY_ID = os.environ.get("RAZORPAY_KEY_ID", "")
-RAZORPAY_KEY_SECRET = os.environ.get("RAZORPAY_KEY_SECRET", "")
+RAZORPAY_KEY_ID = os.getenv("RAZORPAY_KEY_ID")
+RAZORPAY_KEY_SECRET = os.getenv("RAZORPAY_KEY_SECRET")
