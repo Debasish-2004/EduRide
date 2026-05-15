@@ -2,26 +2,36 @@
 {% load static tailwind_tags %}
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Student Sign Up</title>
-     {% tailwind_css %}
+    {% tailwind_css %}
 </head>
+
 <body class="min-h-screen bg-gradient-to-br from-blue-100 via-white to-sky-100 flex items-center justify-center px-4">
 
     <div class="w-full max-w-md bg-white shadow-2xl rounded-2xl p-8 border border-slate-200">
-        
+
         <h1 class="text-3xl font-bold text-center text-slate-800 mb-6">
             Student Sign Up
         </h1>
 
         {% if messages %}
-            {% for message in messages %}
-                <div class="mb-4 px-4 py-3 rounded-lg bg-red-100 text-red-700 text-sm">
-                    {{ message }}
-                </div>
-            {% endfor %}
+        {% for message in messages %}
+        <div class="mb-4 px-4 py-3 rounded-lg text-sm
+                    {% if message.tags == 'error' %}
+                        bg-red-100 text-red-700
+                    {% elif message.tags == 'success' %}
+                        bg-green-100 text-green-700
+                    {% else %}
+                        bg-blue-100 text-blue-700
+                    {% endif %}
+                ">
+            {{ message }}
+        </div>
+        {% endfor %}
         {% endif %}
 
         <form method="POST" class="space-y-4">
@@ -43,8 +53,7 @@
             <input type="password" name="password2" placeholder="Confirm Password" required
                 class="w-full px-4 py-3 border rounded-xl focus:ring-2 focus:ring-blue-500">
 
-            <button type="submit"
-                class="w-full bg-blue-600 text-white py-3 rounded-xl hover:bg-blue-700">
+            <button type="submit" class="w-full bg-blue-600 text-white py-3 rounded-xl hover:bg-blue-700">
                 Create Account
             </button>
         </form>
@@ -59,4 +68,5 @@
     </div>
 
 </body>
+
 </html>

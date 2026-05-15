@@ -111,6 +111,20 @@
 
 </div>
 
+<!-- ═══ Route Deviation Alert Banner (fixed, hidden by default) ═══ -->
+{% if route and route.is_active %}
+<div id="deviation-alert"
+     class="hidden fixed top-4 left-1/2 -translate-x-1/2 z-50 max-w-lg w-[90%]
+            bg-red-600 text-white px-6 py-4 rounded-2xl shadow-2xl
+            flex items-center gap-3 animate-pulse">
+    <span class="text-2xl">⚠️</span>
+    <div>
+        <p class="font-bold text-sm">You are off-route!</p>
+        <p class="text-xs opacity-90" id="deviation-distance">Please return to the designated route.</p>
+    </div>
+</div>
+{% endif %}
+
 {% if route and route.is_active %}
 <script>
 (function () {
@@ -118,8 +132,19 @@
     const SEND_INTERVAL_MS = 5000;  // Send location every 5 seconds
     const UPDATE_URL = "{% url 'update_location' %}";
     const CSRF_TOKEN = "{{ csrf_token }}";
+    const DEVIATION_THRESHOLD_KM = 1.0;  // 1 km threshold
+
+    // Route polyline coordinates for deviation detection
+    const routeCoords = JSON.parse('{{ route_coords_json|escapejs }}');
 
     const statusEl = document.getElementById("gps-status");
+    const deviationAlert = document.getElementById("deviation-alert");
+    const deviationDistanceEl = document.getElementById("deviation-distance");
+
+    // Request browser notification permission on page load
+    if ("Notification" in window && Notification.permission === "default") {
+        Notification.requestPermission();
+    }
 
     // Check browser support
     if (!navigator.geolocation) {
@@ -131,6 +156,57 @@
     let lastLat = null;
     let lastLng = null;
     let sendCount = 0;
+    let isDeviated = false;  // Track current deviation state to avoid spamming notifications
+
+    // ── Haversine distance (km) ──
+    function haversineKm(lat1, lon1, lat2, lon2) {
+        const R = 6371;
+        const dLat = (lat2 - lat1) * Math.PI / 180;
+        const dLon = (lon2 - lon1) * Math.PI / 180;
+        const a = Math.sin(dLat / 2) ** 2 +
+                  Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+                  Math.sin(dLon / 2) ** 2;
+        return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+    }
+
+    // ── Find minimum distance to any point on the route polyline ──
+    function minDistanceToRoute(lat, lng) {
+        if (!routeCoords || routeCoords.length === 0) return 0;
+        let minDist = Infinity;
+        for (const coord of routeCoords) {
+            const d = haversineKm(lat, lng, coord[0], coord[1]);
+            if (d < minDist) minDist = d;
+        }
+        return minDist;
+    }
+
+    // ── Check deviation and show/hide alert ──
+    function checkDeviation(lat, lng) {
+        const dist = minDistanceToRoute(lat, lng);
+
+        if (dist > DEVIATION_THRESHOLD_KM) {
+            // Show alert
+            deviationAlert.classList.remove("hidden");
+            deviationDistanceEl.textContent =
+                "You are " + dist.toFixed(1) + " km from the route. Please return.";
+
+            // Send browser notification only on first deviation detection
+            if (!isDeviated) {
+                isDeviated = true;
+                if ("Notification" in window && Notification.permission === "granted") {
+                    new Notification("⚠️ Off Route!", {
+                        body: "You are " + dist.toFixed(1) + " km from the route. Please return to the designated route.",
+                        icon: "🚌",
+                        requireInteraction: true,
+                    });
+                }
+            }
+        } else {
+            // Hide alert — driver is back on route
+            deviationAlert.classList.add("hidden");
+            isDeviated = false;
+        }
+    }
 
     // ── Send coordinates to server ──
     function sendLocation(lat, lng) {
@@ -165,6 +241,9 @@
         function (position) {
             lastLat = position.coords.latitude;
             lastLng = position.coords.longitude;
+
+            // Check deviation on every GPS update
+            checkDeviation(lastLat, lastLng);
         },
         function (error) {
             if (error.code === error.PERMISSION_DENIED) {
@@ -194,6 +273,7 @@
             lastLat = position.coords.latitude;
             lastLng = position.coords.longitude;
             sendLocation(lastLat, lastLng);
+            checkDeviation(lastLat, lastLng);
         },
         function () {
             // Handled by watchPosition error callback above

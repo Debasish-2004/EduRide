@@ -38,7 +38,9 @@ def _safe_coord(coordinates, index, default):
 def home(request):
     # Scope to the student's institute only.
     institute = request.user.profile.institute
-    routes = Route.objects.filter(institute=institute)
+    routes = Route.objects.filter(institute=institute).prefetch_related(
+        "schedules", "stops"
+    )
 
     buses = []
     for route in routes:
@@ -50,6 +52,26 @@ def home(request):
             "lng": _safe_coord(route.coordinates, 1, 85.8245),
             "routeCoords": route.coordinates if route.coordinates else [],
             "is_active": route.is_active,
+            "schedules": [
+                {
+                    "id": s.id,
+                    "label": s.label,
+                    "time": s.departure_time.strftime("%I:%M %p"),
+                    "hour": s.departure_time.hour,
+                    "minute": s.departure_time.minute,
+                }
+                for s in route.schedules.all()
+            ],
+            "stops": [
+                {
+                    "name": st.name,
+                    "lat": st.latitude,
+                    "lng": st.longitude,
+                    "order": st.order_index,
+                    "eta_minutes": st.eta_minutes,
+                }
+                for st in route.stops.all()
+            ],
         })
 
     return render(request, "index.html", {

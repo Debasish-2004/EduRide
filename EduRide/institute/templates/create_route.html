@@ -37,6 +37,13 @@
         color: #0f172a;
       }
 
+      h2 {
+        margin-top: 28px;
+        margin-bottom: 12px;
+        color: #1e293b;
+        font-size: 18px;
+      }
+
       label {
         display: block;
         margin-bottom: 8px;
@@ -44,7 +51,8 @@
         color: #334155;
       }
 
-      input[type="text"] {
+      input[type="text"],
+      input[type="time"] {
         width: 100%;
         padding: 12px;
         border: 1px solid #cbd5e1;
@@ -77,32 +85,14 @@
         cursor: pointer;
       }
 
-      .btn-primary {
-        background: #2563eb;
-        color: white;
-      }
-
-      .btn-primary:hover {
-        background: #1d4ed8;
-      }
-
-      .btn-warning {
-        background: #f59e0b;
-        color: white;
-      }
-
-      .btn-warning:hover {
-        background: #d97706;
-      }
-
-      .btn-danger {
-        background: #ef4444;
-        color: white;
-      }
-
-      .btn-danger:hover {
-        background: #dc2626;
-      }
+      .btn-primary { background: #2563eb; color: white; }
+      .btn-primary:hover { background: #1d4ed8; }
+      .btn-warning { background: #f59e0b; color: white; }
+      .btn-warning:hover { background: #d97706; }
+      .btn-danger { background: #ef4444; color: white; }
+      .btn-danger:hover { background: #dc2626; }
+      .btn-secondary { background: #10b981; color: white; }
+      .btn-secondary:hover { background: #059669; }
 
       .error-box {
         background: #fee2e2;
@@ -129,6 +119,96 @@
       .leaflet-routing-container {
         display: none;
       }
+
+      /* ── Schedule rows ── */
+      .schedule-section {
+        background: #f0fdf4;
+        border: 1px solid #bbf7d0;
+        border-radius: 12px;
+        padding: 16px;
+        margin-bottom: 20px;
+      }
+
+      .schedule-row {
+        display: flex;
+        gap: 10px;
+        align-items: center;
+        margin-bottom: 10px;
+        flex-wrap: wrap;
+      }
+
+      .schedule-row input[type="text"] { flex: 2; margin-bottom: 0; min-width: 140px; }
+      .schedule-row input[type="time"] { flex: 1; margin-bottom: 0; min-width: 120px; }
+
+      .schedule-row .btn-remove {
+        background: #ef4444; color: white; padding: 8px 12px;
+        border-radius: 8px; font-size: 13px; cursor: pointer; border: none; flex-shrink: 0;
+      }
+
+      /* ── Waypoint-to-stop selection ── */
+      .stops-section {
+        background: #fef3c7;
+        border: 1px solid #fde68a;
+        border-radius: 12px;
+        padding: 16px;
+        margin-top: 20px;
+      }
+
+      .waypoint-row {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        padding: 10px 12px;
+        background: white;
+        border: 1px solid #e5e7eb;
+        border-radius: 8px;
+        margin-bottom: 8px;
+        transition: all 0.2s;
+      }
+
+      .waypoint-row.is-stop {
+        border-color: #2563eb;
+        background: #eff6ff;
+      }
+
+      .waypoint-row .wp-number {
+        font-weight: 700;
+        color: #64748b;
+        font-size: 14px;
+        min-width: 60px;
+      }
+
+      .waypoint-row.is-stop .wp-number {
+        color: #2563eb;
+      }
+
+      .waypoint-row .wp-coords {
+        font-size: 12px;
+        color: #94a3b8;
+        min-width: 140px;
+      }
+
+      .waypoint-row input[type="text"] {
+        flex: 1;
+        margin-bottom: 0;
+        padding: 8px 10px;
+        font-size: 14px;
+        min-width: 120px;
+      }
+
+      .waypoint-row input[type="checkbox"] {
+        width: 18px;
+        height: 18px;
+        cursor: pointer;
+        accent-color: #2563eb;
+        flex-shrink: 0;
+      }
+
+      .wp-stop-label {
+        font-size: 13px;
+        color: #64748b;
+        font-weight: 500;
+      }
     </style>
   </head>
   <body>
@@ -140,13 +220,15 @@
       {% endif %}
 
       <div class="info-box">
-        Click on the map to add route waypoints. The road-following route will
-        be generated automatically.
+        <strong>Step 1:</strong> Add bus schedules (departure times).<br />
+        <strong>Step 2:</strong> Click on the map to add route waypoints.<br />
+        <strong>Step 3:</strong> Below the map, check which waypoints are bus stops and name them.<br />
+        Arrival times at each stop are auto-calculated based on distance (40 km/h average speed).
       </div>
 
       <form method="POST" onsubmit="return validateRouteBeforeSubmit();">
         {% csrf_token %}
-        <label for="name">Bus-No</label>
+        <label for="no">Bus-No</label>
         <input
           type="text"
           id="no"
@@ -155,7 +237,7 @@
           placeholder="Enter Bus no . The format prefered INSTITUTENAME-NUMBER"
           required
         />
-        <label for="Route_name">Route Name</label>
+        <label for="route_name">Route Name</label>
         <input
           type="text"
           id="route_name"
@@ -165,13 +247,43 @@
           required
         />
 
+        <!-- ── Bus Schedules Section ── -->
+        <div class="schedule-section">
+          <h2 style="margin-top: 0">🕐 Bus Schedules <span style="color:#dc2626;font-size:14px;">(Required)</span></h2>
+          <div id="schedule-list">
+            <div class="schedule-row">
+              <input type="text" placeholder='Label (e.g. "Morning Pickup")' class="sched-label" />
+              <input type="time" class="sched-time" />
+              <button type="button" class="btn-remove" onclick="removeScheduleRow(this)">✕</button>
+            </div>
+          </div>
+          <button type="button" class="btn-secondary" onclick="addScheduleRow()" style="margin-top:6px;">
+            ➕ Add Schedule
+          </button>
+        </div>
+
         <input type="hidden" name="coordinates" id="coordinates" />
         <input type="hidden" name="waypoints" id="waypoints" />
+        <input type="hidden" name="schedules" id="schedules-input" />
+        <input type="hidden" name="stops" id="stops-input" />
 
         <div id="map"></div>
 
         <div class="point-count">
           Waypoints selected: <span id="pointCount">0</span>
+        </div>
+
+        <!-- ── Waypoint → Stop Selection ── -->
+        <div class="stops-section">
+          <h2 style="margin-top: 0">📍 Select Bus Stops from Waypoints <span style="color:#dc2626;font-size:14px;">(Min. 2 required)</span></h2>
+          <p style="color:#64748b;font-size:13px;margin-bottom:12px;">
+            Check the waypoints that are bus stops and give each stop a name. Stops must be route waypoints.
+          </p>
+          <div id="waypoint-stop-list">
+            <p style="color:#94a3b8;font-size:14px;" id="no-wp-msg">
+              Add at least 2 waypoints on the map first, then select which ones are stops.
+            </p>
+          </div>
         </div>
 
         <div class="btn-row">
@@ -199,6 +311,113 @@
       let routingControl = null;
       let latestRouteCoordinates = [];
 
+      // ── Schedule management ──
+      function addScheduleRow() {
+        const row = document.createElement("div");
+        row.className = "schedule-row";
+        row.innerHTML = `
+          <input type="text" placeholder='Label (e.g. "Evening Return")' class="sched-label" />
+          <input type="time" class="sched-time" />
+          <button type="button" class="btn-remove" onclick="removeScheduleRow(this)">✕</button>
+        `;
+        document.getElementById("schedule-list").appendChild(row);
+      }
+
+      function removeScheduleRow(btn) {
+        const rows = document.querySelectorAll(".schedule-row");
+        if (rows.length <= 1) {
+          alert("At least one schedule is required.");
+          return;
+        }
+        btn.closest(".schedule-row").remove();
+      }
+
+      function collectSchedules() {
+        const rows = document.querySelectorAll(".schedule-row");
+        const schedules = [];
+        rows.forEach(row => {
+          const label = row.querySelector(".sched-label").value.trim();
+          const time = row.querySelector(".sched-time").value.trim();
+          if (label && time) {
+            schedules.push({ label, time });
+          }
+        });
+        return schedules;
+      }
+
+      // ── Waypoint-to-Stop list rendering ──
+      function renderWaypointStopList() {
+        const container = document.getElementById("waypoint-stop-list");
+        document.getElementById("pointCount").textContent = waypoints.length;
+
+        if (waypoints.length === 0) {
+          container.innerHTML = '<p style="color:#94a3b8;font-size:14px;">Add at least 2 waypoints on the map first, then select which ones are stops.</p>';
+          return;
+        }
+
+        let html = "";
+        waypoints.forEach((wp, i) => {
+          // First waypoint is ALWAYS a stop (departure point) — auto-checked & disabled
+          const isFirst = (i === 0);
+          const checked = isFirst ? "checked disabled" : "";
+          const isStopClass = isFirst ? "is-stop" : "";
+          const nameDisplay = isFirst ? "block" : "none";
+
+          html += `
+            <div class="waypoint-row ${isStopClass}" id="wp-row-${i}">
+              <input type="checkbox" id="wp-check-${i}" onchange="toggleStopRow(${i})" ${checked} />
+              <span class="wp-number">Point #${i + 1}${isFirst ? ' (Departure)' : ''}</span>
+              <span class="wp-coords">${wp[0].toFixed(5)}, ${wp[1].toFixed(5)}</span>
+              <input type="text" id="wp-name-${i}" placeholder="${isFirst ? 'Departure stop name (required)' : 'Stop name (required if checked)'}"
+                     style="display:${nameDisplay};" />
+            </div>
+          `;
+        });
+        container.innerHTML = html;
+      }
+
+      function toggleStopRow(index) {
+        // First waypoint cannot be unchecked
+        if (index === 0) {
+          document.getElementById("wp-check-0").checked = true;
+          return;
+        }
+
+        const row = document.getElementById("wp-row-" + index);
+        const checkbox = document.getElementById("wp-check-" + index);
+        const nameInput = document.getElementById("wp-name-" + index);
+
+        if (checkbox.checked) {
+          row.classList.add("is-stop");
+          nameInput.style.display = "block";
+          nameInput.focus();
+        } else {
+          row.classList.remove("is-stop");
+          nameInput.style.display = "none";
+          nameInput.value = "";
+        }
+      }
+
+      function collectStops() {
+        const stops = [];
+        waypoints.forEach((wp, i) => {
+          const checkbox = document.getElementById("wp-check-" + i);
+          const nameInput = document.getElementById("wp-name-" + i);
+          // First waypoint is always a stop (its checkbox is disabled+checked)
+          const isSelected = (i === 0) || (checkbox && checkbox.checked);
+          if (isSelected) {
+            stops.push({
+              name: (nameInput.value || "").trim(),
+              lat: wp[0],
+              lng: wp[1],
+              order: stops.length,
+            });
+          }
+        });
+        return stops;
+      }
+
+      // ── Routing ──
       function createRoutingControl() {
         if (routingControl) {
           map.removeControl(routingControl);
@@ -249,7 +468,6 @@
         const lng = e.latlng.lng;
 
         waypoints.push([lat, lng]);
-        document.getElementById("pointCount").textContent = waypoints.length;
         document.getElementById("waypoints").value = JSON.stringify(waypoints);
 
         if (waypoints.length === 1) {
@@ -260,18 +478,19 @@
           latestRouteCoordinates = [];
           document.getElementById("coordinates").value = "";
           L.marker([lat, lng]).addTo(map);
+          renderWaypointStopList();
           return;
         }
 
         removeTemporaryMarkers();
         createRoutingControl();
+        renderWaypointStopList();
       });
 
       function undoPoint() {
         if (waypoints.length === 0) return;
 
         waypoints.pop();
-        document.getElementById("pointCount").textContent = waypoints.length;
         document.getElementById("waypoints").value = JSON.stringify(waypoints);
 
         latestRouteCoordinates = [];
@@ -289,6 +508,8 @@
         } else if (waypoints.length >= 2) {
           createRoutingControl();
         }
+
+        renderWaypointStopList();
       }
 
       function clearRoute() {
@@ -297,14 +518,14 @@
 
         document.getElementById("coordinates").value = "";
         document.getElementById("waypoints").value = "";
-        document.getElementById("pointCount").textContent = "0";
 
-        if (routingControl) { 
+        if (routingControl) {
           map.removeControl(routingControl);
           routingControl = null;
         }
 
         clearNonTileLayers();
+        renderWaypointStopList();
       }
 
       function clearNonTileLayers() {
@@ -324,8 +545,32 @@
       }
 
       function validateRouteBeforeSubmit() {
+        // Collect and validate schedules
+        const schedules = collectSchedules();
+        if (schedules.length === 0) {
+          alert("Please add at least one bus schedule with a label and departure time.");
+          return false;
+        }
+        document.getElementById("schedules-input").value = JSON.stringify(schedules);
+
+        // Collect and validate stops
+        const stops = collectStops();
+        if (stops.length < 2) {
+          alert("Please select at least 2 waypoints as bus stops.");
+          return false;
+        }
+        // Check all stops have names
+        for (let i = 0; i < stops.length; i++) {
+          if (!stops[i].name) {
+            alert("Stop #" + (i + 1) + " is missing a name. Please name all selected stops.");
+            return false;
+          }
+        }
+        document.getElementById("stops-input").value = JSON.stringify(stops);
+
+        // Validate route
         if (waypoints.length < 2) {
-          alert("Please select at least 2 points.");
+          alert("Please select at least 2 route waypoints.");
           return false;
         }
 

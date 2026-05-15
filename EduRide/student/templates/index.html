@@ -26,17 +26,62 @@
         </div>
     </div>
 
-    <!-- Bus list section -->
+    <!-- Right sidebar — Bus list OR Route detail -->
     <div class="w-full lg:w-[30%] h-auto lg:h-screen p-3 lg:p-4 lg:pl-0">
         <div class="bg-white rounded-2xl shadow-md h-full border border-gray-200 flex flex-col">
-            <div class="px-4 py-3 lg:px-5 lg:py-4 border-b border-gray-200">
-                <h2 class="text-lg lg:text-xl font-semibold text-gray-800">Institute Buses</h2>
-                <p class="text-sm text-gray-500">Click any bus to view its location</p>
+
+            <!-- ═══ PANEL 1: Bus List (default) ═══ -->
+            <div id="panel-bus-list" class="flex flex-col h-full">
+                <div class="px-4 py-3 lg:px-5 lg:py-4 border-b border-gray-200">
+                    <h2 class="text-lg lg:text-xl font-semibold text-gray-800">Institute Buses</h2>
+                    <p class="text-sm text-gray-500">Click any bus to view its location</p>
+                </div>
+                <div class="p-3 lg:p-4 overflow-y-auto space-y-3 flex-1" id="bus-list">
+                    <!-- Bus cards will be inserted here by JS -->
+                </div>
             </div>
 
-            <div class="p-3 lg:p-4 overflow-y-auto space-y-3" id="bus-list">
-                <!-- Bus cards will be inserted here -->
+            <!-- ═══ PANEL 2: Route Detail (hidden by default) ═══ -->
+            <div id="panel-route-detail" class="flex flex-col h-full hidden">
+                <!-- Back button -->
+                <div class="px-4 py-3 border-b border-gray-200">
+                    <button id="back-to-list-btn" type="button"
+                        class="flex items-center gap-2 text-blue-600 hover:text-blue-800 font-medium text-sm transition">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M15 19l-7-7 7-7"/>
+                        </svg>
+                        All Buses
+                    </button>
+                </div>
+
+                <!-- Bus info header -->
+                <div class="px-4 py-3 border-b border-gray-200">
+                    <div class="flex justify-between items-start">
+                        <div>
+                            <h2 id="detail-bus-no" class="text-xl font-bold text-gray-800"></h2>
+                            <p id="detail-route-name" class="text-sm text-gray-500 mt-0.5"></p>
+                        </div>
+                        <span id="detail-status-badge"></span>
+                    </div>
+                </div>
+
+                <!-- Schedule tabs -->
+                <div class="px-4 py-3 border-b border-gray-200">
+                    <p class="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-2">🕐 Schedules</p>
+                    <div id="schedule-tabs" class="flex flex-wrap gap-2">
+                        <!-- Populated by JS -->
+                    </div>
+                </div>
+
+                <!-- Stops timeline -->
+                <div class="px-4 py-3 overflow-y-auto flex-1">
+                    <p class="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-3">📍 Route Stops</p>
+                    <div id="stops-timeline">
+                        <!-- Populated by JS -->
+                    </div>
+                </div>
             </div>
+
         </div>
     </div>
 
@@ -116,6 +161,17 @@
         className: '',  // Remove default Leaflet div-icon styling
     });
 
+    // Stop marker icon (small numbered circle)
+    function createStopMarkerIcon(number) {
+        return L.divIcon({
+            html: '<div style="background:#2563eb;color:white;border-radius:50%;width:22px;height:22px;display:flex;align-items:center;justify-content:center;font-weight:bold;font-size:11px;border:2px solid white;box-shadow:0 1px 4px rgba(0,0,0,0.3);">' + number + '</div>',
+            iconSize: [22, 22],
+            iconAnchor: [11, 11],
+            popupAnchor: [0, -11],
+            className: '',
+        });
+    }
+
     //showing the bus popup when the marker is clicked.
     buses.forEach(bus => {
         const markerOptions = bus.is_active ? { icon: busIcon } : { icon: offlineIcon, opacity: 0.5 };
@@ -152,6 +208,197 @@
 
     let currentLocationMarker = null;
     let currentRouteLine = null;
+    let currentStopMarkers = [];  // Stop markers on the map for route detail
+    let selectedBusId = null;     // Currently viewing route detail
+    let selectedScheduleIdx = 0;  // Currently selected schedule tab
+
+    // ── Panel switching ──
+    const panelBusList = document.getElementById("panel-bus-list");
+    const panelRouteDetail = document.getElementById("panel-route-detail");
+
+    function showRouteDetail(bus) {
+        selectedBusId = bus.id;
+        selectedScheduleIdx = 0;
+
+        panelBusList.classList.add("hidden");
+        panelRouteDetail.classList.remove("hidden");
+
+        // Set header info
+        document.getElementById("detail-bus-no").textContent = bus.bus_no;
+        document.getElementById("detail-route-name").textContent = "Route: " + bus.route;
+
+        const statusBadge = bus.is_active
+            ? '<span class="inline-block px-2 py-0.5 bg-green-100 text-green-700 rounded-full text-xs font-medium">Active</span>'
+            : '<span class="inline-block px-2 py-0.5 bg-gray-100 text-gray-500 rounded-full text-xs font-medium">Offline</span>';
+        document.getElementById("detail-status-badge").innerHTML = statusBadge;
+
+        // Build schedule tabs
+        const tabsContainer = document.getElementById("schedule-tabs");
+        if (bus.schedules && bus.schedules.length > 0) {
+            let tabsHtml = '';
+            bus.schedules.forEach((s, idx) => {
+                const activeClass = idx === 0
+                    ? 'bg-blue-600 text-white'
+                    : 'bg-gray-100 text-gray-600 hover:bg-gray-200';
+                tabsHtml += `
+                    <button type="button" data-sched-idx="${idx}"
+                        class="sched-tab px-3 py-1.5 rounded-lg text-xs font-medium transition ${activeClass}"
+                        onclick="selectSchedule(${bus.id}, ${idx})">
+                        ${s.label}<br><span class="font-bold">${s.time}</span>
+                    </button>
+                `;
+            });
+            tabsContainer.innerHTML = tabsHtml;
+        } else {
+            tabsContainer.innerHTML = '<p class="text-xs text-gray-400">No schedules defined</p>';
+        }
+
+        // Build stops timeline
+        renderStopsTimeline(bus, 0);
+
+        // ── Map: show only this bus + route + stops ──
+        // Hide all other bus markers
+        Object.values(markers).forEach(m => {
+            if (m !== markers[bus.id]) {
+                map.removeLayer(m);
+            }
+        });
+
+        // Add the selected bus marker
+        if (!map.hasLayer(markers[bus.id])) {
+            markers[bus.id].addTo(map);
+        }
+
+        // Draw the route polyline
+        if (currentRouteLine) map.removeLayer(currentRouteLine);
+        if (bus.routeCoords && bus.routeCoords.length > 1) {
+            currentRouteLine = L.polyline(bus.routeCoords, { color: 'blue', weight: 4, opacity: 0.7 }).addTo(map);
+            map.fitBounds(currentRouteLine.getBounds(), { padding: [50, 50] });
+        } else {
+            map.setView([bus.lat, bus.lng], 14, { animate: true });
+        }
+
+        // Add stop markers on the map
+        clearStopMarkers();
+        if (bus.stops && bus.stops.length > 0) {
+            bus.stops.forEach((st, i) => {
+                const sm = L.marker([st.lat, st.lng], { icon: createStopMarkerIcon(i + 1) })
+                    .addTo(map)
+                    .bindPopup(`<b>Stop #${i+1}</b><br>${st.name}`);
+                currentStopMarkers.push(sm);
+            });
+        }
+
+        markers[bus.id].openPopup();
+    }
+
+    function showBusList() {
+        selectedBusId = null;
+
+        panelRouteDetail.classList.add("hidden");
+        panelBusList.classList.remove("hidden");
+
+        // Restore all bus markers
+        Object.keys(markers).forEach(id => {
+            if (!map.hasLayer(markers[id])) {
+                markers[id].addTo(map);
+            }
+        });
+
+        // Remove route line and stop markers
+        if (currentRouteLine) {
+            map.removeLayer(currentRouteLine);
+            currentRouteLine = null;
+        }
+        clearStopMarkers();
+
+        // Reset zoom to show all
+        if (buses.length > 0) {
+            const allCoords = buses.map(b => [b.lat, b.lng]);
+            map.fitBounds(allCoords, { padding: [50, 50] });
+        }
+    }
+
+    function clearStopMarkers() {
+        currentStopMarkers.forEach(m => map.removeLayer(m));
+        currentStopMarkers = [];
+    }
+
+    // ── Schedule tab selection ──
+    function selectSchedule(busId, idx) {
+        selectedScheduleIdx = idx;
+        const bus = buses.find(b => b.id === busId);
+        if (!bus) return;
+
+        // Update tab styles
+        document.querySelectorAll(".sched-tab").forEach((tab, i) => {
+            if (i === idx) {
+                tab.className = "sched-tab px-3 py-1.5 rounded-lg text-xs font-medium transition bg-blue-600 text-white";
+            } else {
+                tab.className = "sched-tab px-3 py-1.5 rounded-lg text-xs font-medium transition bg-gray-100 text-gray-600 hover:bg-gray-200";
+            }
+        });
+
+        renderStopsTimeline(bus, idx);
+    }
+
+    // ── Stops timeline rendering ──
+    function renderStopsTimeline(bus, schedIdx) {
+        const container = document.getElementById("stops-timeline");
+
+        if (!bus.stops || bus.stops.length === 0) {
+            container.innerHTML = '<p class="text-sm text-gray-400">No stops defined for this route.</p>';
+            return;
+        }
+
+        const schedule = (bus.schedules && bus.schedules[schedIdx]) || null;
+
+        let html = '';
+        bus.stops.forEach((st, i) => {
+            const isFirst = i === 0;
+            const isLast = i === bus.stops.length - 1;
+
+            // Compute arrival time if schedule exists
+            let arrivalStr = '';
+            if (schedule) {
+                const totalMin = schedule.hour * 60 + schedule.minute + st.eta_minutes;
+                const h = Math.floor(totalMin / 60) % 24;
+                const m = totalMin % 60;
+                const ampm = h >= 12 ? 'PM' : 'AM';
+                const h12 = h % 12 || 12;
+                arrivalStr = `${h12}:${m.toString().padStart(2, '0')} ${ampm}`;
+            }
+
+            const etaLabel = st.eta_minutes === 0 ? 'Departure' : `+${st.eta_minutes} min`;
+
+            html += `
+                <div class="flex items-start gap-3 ${!isLast ? 'pb-4' : ''}">
+                    <!-- Timeline dot + line -->
+                    <div class="flex flex-col items-center">
+                        <div class="w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold
+                            ${isFirst ? 'bg-green-500 text-white' : isLast ? 'bg-red-500 text-white' : 'bg-blue-500 text-white'}
+                            shadow-sm">
+                            ${i + 1}
+                        </div>
+                        ${!isLast ? '<div class="w-0.5 flex-1 bg-gray-200 mt-1" style="min-height:24px;"></div>' : ''}
+                    </div>
+                    <!-- Stop info -->
+                    <div class="flex-1 pb-1">
+                        <p class="font-medium text-gray-800 text-sm leading-tight">${st.name}</p>
+                        <div class="flex items-center gap-2 mt-0.5">
+                            ${arrivalStr ? `<span class="text-xs font-semibold text-blue-600">${arrivalStr}</span>` : ''}
+                            <span class="text-xs text-gray-400">${etaLabel}</span>
+                        </div>
+                    </div>
+                </div>
+            `;
+        });
+
+        container.innerHTML = html;
+    }
+
+    // ── Back button ──
+    document.getElementById("back-to-list-btn").addEventListener("click", showBusList);
 
     //listing the cards in buslist...
     if (buses.length === 0) {
@@ -170,31 +417,44 @@
                 ? '<span class="inline-block px-2 py-0.5 bg-green-100 text-green-700 rounded-full text-xs font-medium">Active</span>'
                 : '<span class="inline-block px-2 py-0.5 bg-gray-100 text-gray-500 rounded-full text-xs font-medium">Offline</span>';
 
+            // Show schedule summary
+            let scheduleInfo = '';
+            if (bus.schedules && bus.schedules.length > 0) {
+                const times = bus.schedules.map(s => s.time).join(', ');
+                scheduleInfo = `<p class="text-xs text-gray-400 mt-1">🕐 ${times}</p>`;
+            }
+
             card.innerHTML = `
                 <div class="flex justify-between items-start">
                     <h3 class="text-base lg:text-lg font-semibold text-gray-800">${bus.bus_no}</h3>
                     ${statusBadge}
                 </div>
                 <p class="text-sm text-gray-600 mt-1"><span class="font-medium">Route:</span> ${bus.route}</p>
-                <button class="mt-3 px-4 py-2 bg-blue-600 text-white rounded-lg text-sm hover:bg-blue-700">
-                    View Location
+                ${scheduleInfo}
+                <button class="view-route-btn mt-3 px-4 py-2 bg-blue-600 text-white rounded-lg text-sm hover:bg-blue-700 transition">
+                    View Route
                 </button>
             `;
 
-            card.addEventListener("click", () => {
-                // Hide all other bus markers
+            // Clicking the card focuses the bus on the map (legacy behavior)
+            card.addEventListener("click", (e) => {
+                // If they clicked the "View Route" button, show detail panel
+                if (e.target.classList.contains("view-route-btn")) {
+                    showRouteDetail(bus);
+                    return;
+                }
+
+                // Otherwise just focus on the bus marker
                 Object.values(markers).forEach(m => {
                     if (m !== markers[bus.id]) {
                         map.removeLayer(m);
                     }
                 });
 
-                // Add the selected bus marker (if it was removed)
                 if (!map.hasLayer(markers[bus.id])) {
                     markers[bus.id].addTo(map);
                 }
 
-                // Draw the bus path (polyline) and remove the old one if exists
                 if (currentRouteLine) {
                     map.removeLayer(currentRouteLine);
                 }
@@ -360,4 +620,4 @@
     }, POLL_INTERVAL_MS);
 
 </script>
-{% endblock %} 
+{% endblock %}

@@ -1,4 +1,5 @@
 import json
+import math
 import hmac
 import hashlib
 
@@ -7,7 +8,7 @@ from django.conf import settings
 from django.db import transaction
 from django.core.exceptions import ValidationError
 from django.shortcuts import render, redirect, get_object_or_404
-from .models import Institute, Route
+from .models import Institute, Route, BusSchedule, BusStop
 from django.contrib.auth.models import User
 from django.contrib import messages
 from django.contrib.auth import authenticate, login, logout
@@ -33,6 +34,128 @@ def _safe_coord(coordinates, index, default):
         return coordinates[0][index]
     except (IndexError, TypeError, KeyError):
         return default
+
+
+# ---------------------------------------------------------------------------
+#  Helpers: Haversine distance & auto-ETA calculation
+# ---------------------------------------------------------------------------
+
+BUS_SPEED_KMH = 40  # Average bus speed for ETA calculation
+
+
+def _haversine_km(lat1, lon1, lat2, lon2):
+    """Great-circle distance between two GPS points in kilometres."""
+    R = 6371  # Earth radius in km
+    dlat = math.radians(lat2 - lat1)
+    dlon = math.radians(lon2 - lon1)
+    a = (math.sin(dlat / 2) ** 2 +
+         math.cos(math.radians(lat1)) * math.cos(math.radians(lat2)) *
+         math.sin(dlon / 2) ** 2)
+    return R * 2 * math.atan2(math.sqrt(a), math.sqrt(1 - a))
+
+
+def _compute_eta_minutes(stops):
+    """
+    Compute cumulative ETA in minutes for each stop using Haversine
+    distance ÷ 40 km/h.  Mutates in place and returns the list.
+
+    Each stop must have keys: lat, lng.
+    Adds/overwrites key: eta_minutes.
+    """
+    for i, stop in enumerate(stops):
+        if i == 0:
+            stop["eta_minutes"] = 0
+        else:
+            prev = stops[i - 1]
+            dist_km = _haversine_km(
+                prev["lat"], prev["lng"], stop["lat"], stop["lng"]
+            )
+            travel_min = (dist_km / BUS_SPEED_KMH) * 60
+            stop["eta_minutes"] = prev["eta_minutes"] + round(travel_min)
+    return stops
+
+
+def _parse_schedules(raw):
+    """Parse and validate schedule JSON from the POST body."""
+    try:
+        schedules = json.loads(raw) if raw else []
+    except json.JSONDecodeError:
+        return None, "Invalid schedule data."
+
+    if not isinstance(schedules, list) or len(schedules) == 0:
+        return None, "At least one bus schedule is required."
+
+    for s in schedules:
+        label = (s.get("label") or "").strip()
+        time_str = (s.get("time") or "").strip()
+        if not label or not time_str:
+            return None, "Each schedule must have a label and departure time."
+        s["label"] = label
+        s["time"] = time_str
+
+    return schedules, None
+
+
+def _parse_stops(raw):
+    """Parse and validate stops JSON from the POST body."""
+    try:
+        stops = json.loads(raw) if raw else []
+    except json.JSONDecodeError:
+        return None, "Invalid stop data."
+
+    if not isinstance(stops, list) or len(stops) < 2:
+        return None, "At least two route stops are required."
+
+    for idx, st in enumerate(stops):
+        name = (st.get("name") or "").strip()
+        if not name:
+            return None, f"Stop #{idx + 1} must have a name."
+        try:
+            st["lat"] = float(st["lat"])
+            st["lng"] = float(st["lng"])
+        except (KeyError, ValueError, TypeError):
+            return None, f"Stop #{idx + 1} has invalid coordinates."
+        st["name"] = name
+        st["order"] = idx
+
+    return stops, None
+
+
+def _validate_stops_against_waypoints(stops, waypoints_data):
+    """Ensure every stop's coordinates match a route waypoint.
+
+    Also enforces that the FIRST waypoint must be the FIRST stop
+    (departure point) so ETA calculations start from the route origin.
+
+    Returns an error message string if validation fails, or None if OK.
+    Tolerance of ~1 meter (0.00001 degrees) for floating-point rounding.
+    """
+    if not waypoints_data:
+        return "No waypoints available to validate stops against."
+
+    # The first stop must be the first waypoint (departure point)
+    first_wp = waypoints_data[0]
+    first_stop = stops[0]
+    if (abs(first_stop["lat"] - first_wp[0]) >= 0.00001 or
+            abs(first_stop["lng"] - first_wp[1]) >= 0.00001):
+        return (
+            "The first route waypoint must be a bus stop (departure point). "
+            "Please check the first waypoint."
+        )
+
+    for idx, st in enumerate(stops):
+        matched = False
+        for wp in waypoints_data:
+            if (abs(st["lat"] - wp[0]) < 0.00001 and
+                    abs(st["lng"] - wp[1]) < 0.00001):
+                matched = True
+                break
+        if not matched:
+            return (
+                f"Stop #{idx + 1} (\"{st['name']}\") is not on a route waypoint. "
+                f"Stops can only be placed at route waypoints."
+            )
+    return None
 
 
 # ---------------------------------------------------------------------------
@@ -65,12 +188,21 @@ def institute_admin(request):
     # ── Bus map data ──
     buses = []
     for r in routes:
+        # Use live GPS position for active buses, fall back to first route coord
+        if r.is_active and r.live_latitude is not None and r.live_longitude is not None:
+            lat = r.live_latitude
+            lng = r.live_longitude
+        else:
+            lat = _safe_coord(r.coordinates, 0, 20.2961)
+            lng = _safe_coord(r.coordinates, 1, 85.8245)
+
         buses.append({
             "id": r.id,
             "bus_no": r.bus_no,
             "route": r.route_name,
-            "lat": _safe_coord(r.coordinates, 0, 20.2961),
-            "lng": _safe_coord(r.coordinates, 1, 85.8245),
+            "lat": lat,
+            "lng": lng,
+            "is_active": r.is_active,
             "routeCoords": r.coordinates if r.coordinates else [],
         })
 
@@ -115,6 +247,34 @@ def institute_admin(request):
         "drivers_without_bus_ids": drivers_without_bus_ids,
         "buses_without_driver": buses_without_driver,
     })
+
+@institute_required
+def admin_bus_locations_api(request):
+    """JSON endpoint for the admin dashboard map — returns live bus positions."""
+    institute = request.user.institute
+    routes = Route.objects.filter(institute=institute)
+
+    buses = []
+    for r in routes:
+        if r.is_active and r.live_latitude is not None and r.live_longitude is not None:
+            lat = r.live_latitude
+            lng = r.live_longitude
+        else:
+            lat = _safe_coord(r.coordinates, 0, 20.2961)
+            lng = _safe_coord(r.coordinates, 1, 85.8245)
+
+        buses.append({
+            "id": r.id,
+            "bus_no": r.bus_no,
+            "route": r.route_name,
+            "lat": lat,
+            "lng": lng,
+            "is_active": r.is_active,
+        })
+
+    from django.http import JsonResponse
+    return JsonResponse(buses, safe=False)
+
 
 @institute_required
 @payment_required
@@ -190,14 +350,38 @@ def route(request):
         coordinates = request.POST.get("coordinates")
         waypoints = request.POST.get("waypoints")
 
+        # ── Parse mandatory schedules and stops ──
+        schedules, sched_err = _parse_schedules(request.POST.get("schedules", ""))
+        stops, stops_err = _parse_stops(request.POST.get("stops", ""))
+
+        # Collect form data to re-populate on error
+        form_data = {
+            "bus_no": bus_no,
+            "route_name": route_name,
+            "schedules_json": request.POST.get("schedules", "[]"),
+            "stops_json": request.POST.get("stops", "[]"),
+        }
+
         if not bus_no or not route_name:
             return render(request, "create_route.html", {
-                "error": "Bus number and route name are required."
+                "error": "Bus number and route name are required.",
+                "form_data": form_data,
+            })
+
+        if sched_err:
+            return render(request, "create_route.html", {
+                "error": sched_err, "form_data": form_data,
+            })
+
+        if stops_err:
+            return render(request, "create_route.html", {
+                "error": stops_err, "form_data": form_data,
             })
 
         if not coordinates or not waypoints:
             return render(request, "create_route.html", {
-                "error": "Please create a valid route on the map."
+                "error": "Please create a valid route on the map.",
+                "form_data": form_data,
             })
 
         try:
@@ -205,30 +389,66 @@ def route(request):
             waypoints_data = json.loads(waypoints)
         except json.JSONDecodeError:
             return render(request, "create_route.html", {
-                "error": "Invalid route data."
+                "error": "Invalid route data.", "form_data": form_data,
             })
 
+        # ── Validate stops are on waypoints ──
+        wp_err = _validate_stops_against_waypoints(stops, waypoints_data)
+        if wp_err:
+            return render(request, "create_route.html", {
+                "error": wp_err, "form_data": form_data,
+            })
+
+        # ── Auto-calculate ETA at each stop ──
+        _compute_eta_minutes(stops)
+
         bus = Route(
-            institute=institute,  # Auto-set to the logged-in admin's institute
+            institute=institute,
             bus_no=bus_no,
             route_name=route_name,
             coordinates=coordinates_data,
-            waypoints=waypoints_data
+            waypoints=waypoints_data,
         )
 
         try:
             bus.full_clean()
-            bus.save()
         except ValidationError as exc:
             return render(request, "create_route.html", {
                 "error": " ".join(
                     msg for msg_list in exc.message_dict.values() for msg in msg_list
                 ) if hasattr(exc, 'message_dict') else " ".join(exc.messages),
-                "form_data": {
-                    "bus_no": bus_no,
-                    "route_name": route_name,
-                },
+                "form_data": form_data,
             })
+
+        with transaction.atomic():
+            bus.save()
+
+            # Bulk-create schedules
+            from datetime import time as dt_time
+            schedule_objs = []
+            for s in schedules:
+                parts = s["time"].split(":")
+                h, m = int(parts[0]), int(parts[1]) if len(parts) > 1 else 0
+                schedule_objs.append(BusSchedule(
+                    route=bus,
+                    label=s["label"],
+                    departure_time=dt_time(h, m),
+                ))
+            BusSchedule.objects.bulk_create(schedule_objs)
+
+            # Bulk-create stops
+            stop_objs = [
+                BusStop(
+                    route=bus,
+                    name=st["name"],
+                    latitude=st["lat"],
+                    longitude=st["lng"],
+                    order_index=st["order"],
+                    eta_minutes=st["eta_minutes"],
+                )
+                for st in stops
+            ]
+            BusStop.objects.bulk_create(stop_objs)
 
         return redirect("buslist")
 
@@ -248,20 +468,39 @@ def edit_route(request, bus_id):
         coordinates = request.POST.get("coordinates")
         waypoints = request.POST.get("waypoints")
 
+        # ── Parse mandatory schedules and stops ──
+        schedules, sched_err = _parse_schedules(request.POST.get("schedules", ""))
+        stops, stops_err = _parse_stops(request.POST.get("stops", ""))
+
+        ctx = {"bus": bus}
+
+        if sched_err:
+            ctx["error"] = sched_err
+            return render(request, "edit_route.html", ctx)
+
+        if stops_err:
+            ctx["error"] = stops_err
+            return render(request, "edit_route.html", ctx)
+
         if not coordinates or not waypoints:
-            return render(request, "edit_route.html", {
-                "bus": bus,
-                "error": "Please create a valid route before saving."
-            })
+            ctx["error"] = "Please create a valid route before saving."
+            return render(request, "edit_route.html", ctx)
 
         try:
             coordinates_data = json.loads(coordinates)
             waypoints_data = json.loads(waypoints)
         except json.JSONDecodeError:
-            return render(request, "edit_route.html", {
-                "bus": bus,
-                "error": "Invalid route data."
-            })
+            ctx["error"] = "Invalid route data."
+            return render(request, "edit_route.html", ctx)
+
+        # ── Validate stops are on waypoints ──
+        wp_err = _validate_stops_against_waypoints(stops, waypoints_data)
+        if wp_err:
+            ctx["error"] = wp_err
+            return render(request, "edit_route.html", ctx)
+
+        # ── Auto-calculate ETA at each stop ──
+        _compute_eta_minutes(stops)
 
         bus.bus_no = bus_no
         bus.route_name = route_name
@@ -270,18 +509,66 @@ def edit_route(request, bus_id):
 
         try:
             bus.full_clean()
-            bus.save()
         except ValidationError as exc:
-            return render(request, "edit_route.html", {
-                "bus": bus,
-                "error": " ".join(
-                    msg for msg_list in exc.message_dict.values() for msg in msg_list
-                ) if hasattr(exc, 'message_dict') else " ".join(exc.messages),
-            })
+            ctx["error"] = " ".join(
+                msg for msg_list in exc.message_dict.values() for msg in msg_list
+            ) if hasattr(exc, 'message_dict') else " ".join(exc.messages)
+            return render(request, "edit_route.html", ctx)
+
+        with transaction.atomic():
+            bus.save()
+
+            # Delete old schedules/stops and re-create
+            bus.schedules.all().delete()
+            bus.stops.all().delete()
+
+            from datetime import time as dt_time
+            schedule_objs = []
+            for s in schedules:
+                parts = s["time"].split(":")
+                h, m = int(parts[0]), int(parts[1]) if len(parts) > 1 else 0
+                schedule_objs.append(BusSchedule(
+                    route=bus,
+                    label=s["label"],
+                    departure_time=dt_time(h, m),
+                ))
+            BusSchedule.objects.bulk_create(schedule_objs)
+
+            stop_objs = [
+                BusStop(
+                    route=bus,
+                    name=st["name"],
+                    latitude=st["lat"],
+                    longitude=st["lng"],
+                    order_index=st["order"],
+                    eta_minutes=st["eta_minutes"],
+                )
+                for st in stops
+            ]
+            BusStop.objects.bulk_create(stop_objs)
 
         return redirect("buslist")
 
-    return render(request, "edit_route.html", {"bus": bus})
+    # ── GET: pass existing schedules and stops to template ──
+    existing_schedules = list(bus.schedules.values("label", "departure_time"))
+    schedules_json = json.dumps([
+        {"label": s["label"], "time": s["departure_time"].strftime("%H:%M")}
+        for s in existing_schedules
+    ])
+    existing_stops = list(bus.stops.values(
+        "name", "latitude", "longitude", "order_index", "eta_minutes"
+    ))
+    stops_json = json.dumps([
+        {"name": s["name"], "lat": s["latitude"], "lng": s["longitude"],
+         "order": s["order_index"], "eta_minutes": s["eta_minutes"]}
+        for s in existing_stops
+    ])
+
+    return render(request, "edit_route.html", {
+        "bus": bus,
+        "schedules_json": schedules_json,
+        "stops_json": stops_json,
+    })
 
 
 @institute_required
@@ -321,15 +608,24 @@ def payment_page(request):
         )
         return render(request, "payment.html", {"institute": institute})
 
-    # If we already have an unpaid order, reuse it instead of creating a new one.
+    # If we already have an unpaid order, verify it's still valid on Razorpay's side.
     if institute.razorpay_order_id:
-        return render(request, "payment.html", {
-            "institute": institute,
-            "razorpay_order_id": institute.razorpay_order_id,
-            "razorpay_key_id": settings.RAZORPAY_KEY_ID,
-            "amount": 49900,
-            "amount_display": "499",
-        })
+        try:
+            order = client.order.fetch(institute.razorpay_order_id)
+            if order.get("status") == "created":
+                # Order is still valid and unpaid — reuse it.
+                return render(request, "payment.html", {
+                    "institute": institute,
+                    "razorpay_order_id": institute.razorpay_order_id,
+                    "razorpay_key_id": settings.RAZORPAY_KEY_ID,
+                    "amount": 49900,
+                    "amount_display": "499",
+                })
+        except Exception:
+            pass
+        # Order is expired/failed/invalid — clear it so a new one is created below.
+        institute.razorpay_order_id = ""
+        institute.save(update_fields=["razorpay_order_id"])
 
     # Create a Razorpay order (amount in paise: ₹499 = 49900 paise)
     order_data = {
@@ -566,10 +862,12 @@ def remove_driver(request, user_id):
     )
     # Unassign from any route before deleting (SET_NULL will handle this
     # automatically via on_delete, but let's also deactivate the route).
-    if hasattr(driver_user, "assigned_route"):
-        route = driver_user.assigned_route
-        route.is_active = False
-        route.save(update_fields=["is_active"])
+    # NOTE: We use a direct query instead of hasattr() because hasattr()
+    # is unreliable with OneToOneField reverse relations in Django.
+    assigned_route = Route.objects.filter(driver=driver_user).first()
+    if assigned_route:
+        assigned_route.is_active = False
+        assigned_route.save(update_fields=["is_active"])
     driver_user.delete()  # cascades to UserProfile; route.driver → NULL via SET_NULL
     messages.success(request, f"Driver '{driver_user.username}' has been removed.")
     return redirect("institute_admin")

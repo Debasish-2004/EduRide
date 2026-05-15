@@ -13,6 +13,8 @@ from dotenv import load_dotenv
 import os
 from pathlib import Path
 
+load_dotenv()
+
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
 
@@ -130,6 +132,10 @@ USE_TZ = True
 
 STATIC_URL = 'static/'
 
+# Default primary key field type
+# https://docs.djangoproject.com/en/6.0/ref/settings/#default-auto-field
+DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
+
 
 # ---------------------------------------------------------------------------
 #  Razorpay Configuration (Test Mode)
@@ -140,7 +146,7 @@ STATIC_URL = 'static/'
 #
 # In test mode, use card number 4111 1111 1111 1111 with any future
 # expiry and any CVV to simulate a successful payment.
-load_dotenv()
+
 
 RAZORPAY_KEY_ID = os.getenv("RAZORPAY_KEY_ID")
 RAZORPAY_KEY_SECRET = os.getenv("RAZORPAY_KEY_SECRET")

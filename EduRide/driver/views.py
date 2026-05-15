@@ -18,6 +18,15 @@ from student.models import UserProfile
 from institute.models import Institute, Route
 
 
+def _get_assigned_route(user):
+    """Safely get the route assigned to a driver, or None.
+
+    Uses a direct query instead of hasattr(user, 'assigned_route') because
+    hasattr() is unreliable with OneToOneField reverse relations in Django.
+    """
+    return Route.objects.filter(driver=user).first()
+
+
 # ---------------------------------------------------------------------------
 #  Driver Dashboard (protected by @driver_required)
 # ---------------------------------------------------------------------------
@@ -25,14 +34,14 @@ from institute.models import Institute, Route
 @driver_required
 def driver_dashboard(request):
     """Driver dashboard — shows assigned route and trip controls."""
-    # Try to find the route assigned to this driver.
-    # hasattr check handles the case where the driver has no assigned route.
-    route = None
-    if hasattr(request.user, "assigned_route"):
-        route = request.user.assigned_route
+    route = _get_assigned_route(request.user)
+
+    # Pass route coordinates as JSON for client-side deviation detection.
+    route_coords_json = json.dumps(route.coordinates) if route and route.coordinates else "[]"
 
     return render(request, "driver/dashboard.html", {
         "route": route,
+        "route_coords_json": route_coords_json,
     })
 
 
@@ -44,11 +53,10 @@ def driver_dashboard(request):
 @require_POST
 def toggle_trip(request):
     """Toggle the driver's assigned route between active and inactive."""
-    if not hasattr(request.user, "assigned_route"):
+    route = _get_assigned_route(request.user)
+    if not route:
         messages.error(request, "You don't have a route assigned.")
         return redirect("driver_dashboard")
-
-    route = request.user.assigned_route
     route.is_active = not route.is_active
 
     # When ending a trip, clear the live GPS location so students
@@ -79,10 +87,9 @@ def update_location(request):
     Expects a JSON body: {"latitude": 20.296, "longitude": 85.824}
     Returns JSON: {"status": "ok"} or {"status": "error", "message": "..."}
     """
-    if not hasattr(request.user, "assigned_route"):
+    route = _get_assigned_route(request.user)
+    if not route:
         return JsonResponse({"status": "error", "message": "No route assigned."}, status=400)
-
-    route = request.user.assigned_route
 
     if not route.is_active:
         return JsonResponse({"status": "error", "message": "Trip is not active."}, status=400)

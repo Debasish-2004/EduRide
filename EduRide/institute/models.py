@@ -3,6 +3,8 @@ import uuid
 from django.core.exceptions import ValidationError
 from django.db import models
 from django.db.models.functions import Lower
+from django.db.models.signals import pre_delete
+from django.dispatch import receiver
 from django.contrib.auth.models import User
 
 # Create your models here.
@@ -70,6 +72,30 @@ class Institute(models.Model):
         return f"{self.name} ({self.institute_code})"
 
 
+@receiver(pre_delete, sender=Institute)
+def delete_institute_members(sender, instance, **kwargs):
+    """
+    When an Institute is deleted, also delete all member Users (students & drivers).
+
+    WHY is this needed?
+    -------------------
+    The cascade chain is: Admin User → Institute → UserProfile (via FK CASCADE).
+    But deleting a UserProfile does NOT delete the associated User, because the
+    FK points from UserProfile → User (not the other way around).
+    This leaves orphaned User records for students and drivers.
+
+    This signal closes that gap by deleting member Users BEFORE the Institute
+    is removed, which then cascades to their UserProfiles as well.
+    """
+    # Delete all Users whose profile is linked to this institute.
+    # Excludes the admin user (they're already being deleted via CASCADE).
+    User.objects.filter(
+        profile__institute=instance,
+    ).exclude(
+        id=instance.admin_id,
+    ).delete()
+
+
 class Route(models.Model):
     # ── Which institute owns this route ──
     institute = models.ForeignKey(
@@ -133,3 +159,62 @@ class Route(models.Model):
 
     def __str__(self):
         return f"{self.bus_no}"
+
+
+class BusSchedule(models.Model):
+    """
+    A departure time for a bus route. REQUIRED — every route must have ≥ 1.
+
+    Examples:
+        "Morning Pickup" at 10:00 AM
+        "Evening Return" at 5:00 PM
+    """
+    route = models.ForeignKey(
+        Route,
+        on_delete=models.CASCADE,
+        related_name="schedules",
+    )
+    label = models.CharField(
+        max_length=100,
+        help_text='E.g. "Morning Pickup", "Evening Return"',
+    )
+    departure_time = models.TimeField()
+
+    class Meta:
+        ordering = ["departure_time"]
+
+    def __str__(self):
+        return f"{self.route.bus_no} — {self.label} ({self.departure_time:%I:%M %p})"
+
+
+class BusStop(models.Model):
+    """
+    A named stop along a bus route. REQUIRED — every route must have ≥ 2 stops.
+
+    ETA is auto-calculated from the distance between consecutive stops
+    assuming an average bus speed of 40 km/h (Haversine formula).
+    """
+    route = models.ForeignKey(
+        Route,
+        on_delete=models.CASCADE,
+        related_name="stops",
+    )
+    name = models.CharField(max_length=200)
+    latitude = models.FloatField()
+    longitude = models.FloatField()
+    order_index = models.PositiveIntegerField(
+        help_text="Order of this stop along the route (0 = first stop).",
+    )
+    # Auto-computed: cumulative minutes from the first stop.
+    # First stop = 0, subsequent stops = sum of (distance / 40 km/h) segments.
+    eta_minutes = models.PositiveIntegerField(
+        default=0,
+        help_text="Auto-computed cumulative minutes from departure.",
+    )
+
+    class Meta:
+        ordering = ["order_index"]
+        unique_together = ["route", "order_index"]
+
+    def __str__(self):
+        return f"{self.name} (Stop #{self.order_index})"
