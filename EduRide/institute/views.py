@@ -1,5 +1,4 @@
 import json
-import math
 import hmac
 import hashlib
 
@@ -22,6 +21,7 @@ from student.decorators import institute_required, payment_required
 
 # Import UserProfile so we can create one during institute signup.
 from student.models import UserProfile
+from .route_eta import compute_eta_minutes
 
 
 # ---------------------------------------------------------------------------
@@ -34,45 +34,6 @@ def _safe_coord(coordinates, index, default):
         return coordinates[0][index]
     except (IndexError, TypeError, KeyError):
         return default
-
-
-# ---------------------------------------------------------------------------
-#  Helpers: Haversine distance & auto-ETA calculation
-# ---------------------------------------------------------------------------
-
-BUS_SPEED_KMH = 40  # Average bus speed for ETA calculation
-
-
-def _haversine_km(lat1, lon1, lat2, lon2):
-    """Great-circle distance between two GPS points in kilometres."""
-    R = 6371  # Earth radius in km
-    dlat = math.radians(lat2 - lat1)
-    dlon = math.radians(lon2 - lon1)
-    a = (math.sin(dlat / 2) ** 2 +
-         math.cos(math.radians(lat1)) * math.cos(math.radians(lat2)) *
-         math.sin(dlon / 2) ** 2)
-    return R * 2 * math.atan2(math.sqrt(a), math.sqrt(1 - a))
-
-
-def _compute_eta_minutes(stops):
-    """
-    Compute cumulative ETA in minutes for each stop using Haversine
-    distance ÷ 40 km/h.  Mutates in place and returns the list.
-
-    Each stop must have keys: lat, lng.
-    Adds/overwrites key: eta_minutes.
-    """
-    for i, stop in enumerate(stops):
-        if i == 0:
-            stop["eta_minutes"] = 0
-        else:
-            prev = stops[i - 1]
-            dist_km = _haversine_km(
-                prev["lat"], prev["lng"], stop["lat"], stop["lng"]
-            )
-            travel_min = (dist_km / BUS_SPEED_KMH) * 60
-            stop["eta_minutes"] = prev["eta_minutes"] + round(travel_min)
-    return stops
 
 
 def _parse_schedules(raw):
@@ -399,8 +360,8 @@ def route(request):
                 "error": wp_err, "form_data": form_data,
             })
 
-        # ── Auto-calculate ETA at each stop ──
-        _compute_eta_minutes(stops)
+        # ── Auto-calculate ETA at each stop using route polyline distance ──
+        compute_eta_minutes(stops, coordinates_data)
 
         bus = Route(
             institute=institute,
@@ -499,8 +460,8 @@ def edit_route(request, bus_id):
             ctx["error"] = wp_err
             return render(request, "edit_route.html", ctx)
 
-        # ── Auto-calculate ETA at each stop ──
-        _compute_eta_minutes(stops)
+        # ── Auto-calculate ETA at each stop using route polyline distance ──
+        compute_eta_minutes(stops, coordinates_data)
 
         bus.bus_no = bus_no
         bus.route_name = route_name

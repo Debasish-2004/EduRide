@@ -17,6 +17,8 @@
                         bg-red-100 text-red-700
                     {% elif message.tags == 'success' %}
                         bg-green-100 text-green-700
+                    {% elif message.tags == 'warning' %}
+                        bg-amber-100 text-amber-800 border border-amber-300
                     {% else %}
                         bg-gray-100 text-gray-700
                     {% endif %}
@@ -94,6 +96,49 @@
             </div>
         </div>
 
+        {% if route %}
+        <!-- ═══ Schedules Card ═══ -->
+        <div class="mt-6 bg-purple-50 border border-purple-200 rounded-xl p-6">
+            <div class="flex items-center gap-3 mb-4">
+                <span class="text-2xl">🕐</span>
+                <h2 class="text-lg font-semibold text-purple-800">Departure Schedules</h2>
+            </div>
+            {% if schedules_data %}
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                {% for s in schedules_data %}
+                <div class="bg-white rounded-lg px-4 py-3 border border-purple-100 shadow-sm">
+                    <p class="font-medium text-gray-800">{{ s.label }}</p>
+                    <p class="text-purple-600 font-bold text-lg">{{ s.time }}</p>
+                </div>
+                {% endfor %}
+            </div>
+            {% else %}
+            <p class="text-gray-500 text-sm">No schedules defined for this route.</p>
+            {% endif %}
+        </div>
+
+        <!-- ═══ Stops Timeline Card ═══ -->
+        <div class="mt-6 bg-sky-50 border border-sky-200 rounded-xl p-6">
+            <div class="flex items-center gap-3 mb-4">
+                <span class="text-2xl">📍</span>
+                <h2 class="text-lg font-semibold text-sky-800">Route Stops</h2>
+            </div>
+            <div id="driver-stops-timeline">
+                <!-- Populated by JS -->
+            </div>
+        </div>
+
+        <!-- ═══ Route Map Card ═══ -->
+        <div class="mt-6 bg-teal-50 border border-teal-200 rounded-xl p-6">
+            <div class="flex items-center gap-3 mb-4">
+                <span class="text-2xl">🗺️</span>
+                <h2 class="text-lg font-semibold text-teal-800">Route Map</h2>
+            </div>
+            <div id="driver-route-map" class="w-full rounded-lg border border-teal-200 overflow-hidden"
+                style="height: 350px; min-height: 300px; z-index: 1;"></div>
+        </div>
+        {% endif %}
+
         {% if route and route.is_active %}
         <!-- GPS Location Sharing Card (only visible when trip is active) -->
         <div class="mt-6 bg-amber-50 border border-amber-200 rounded-xl p-6">
@@ -111,10 +156,101 @@
 
 </div>
 
+<!-- ═══ Leaflet CSS & JS for Route Map ═══ -->
+{% if route %}
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
+<script>
+    (function () {
+        // ── Stops timeline rendering ──
+        const stopsData = JSON.parse('{{ stops_data_json|escapejs }}');
+        const timelineContainer = document.getElementById('driver-stops-timeline');
+
+        if (stopsData.length === 0) {
+            timelineContainer.innerHTML = '<p class="text-sm text-gray-400">No stops defined for this route.</p>';
+        } else {
+            let html = '';
+            stopsData.forEach(function (st, i) {
+                const isFirst = i === 0;
+                const isLast = i === stopsData.length - 1;
+                const etaLabel = st.eta_minutes === 0 ? 'Departure' : '+' + st.eta_minutes + ' min';
+
+                const dotColor = isFirst ? 'bg-green-500' : (isLast ? 'bg-red-500' : 'bg-blue-500');
+
+                html += '<div class="flex items-start gap-3 ' + (!isLast ? 'pb-4' : '') + '">' +
+                    '<div class="flex flex-col items-center">' +
+                    '<div class="w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold text-white shadow-sm ' + dotColor + '">' +
+                    (i + 1) +
+                    '</div>' +
+                    (!isLast ? '<div class="w-0.5 flex-1 bg-gray-200 mt-1" style="min-height:24px;"></div>' : '') +
+                    '</div>' +
+                    '<div class="flex-1 pb-1">' +
+                    '<p class="font-medium text-gray-800 text-sm leading-tight">' + st.name + '</p>' +
+                    '<span class="text-xs text-gray-400">' + etaLabel + '</span>' +
+                    '</div>' +
+                    '</div>';
+            });
+            timelineContainer.innerHTML = html;
+        }
+
+        // ── Route Map ──
+        const routeCoords = JSON.parse('{{ route_coords_json|escapejs }}');
+        const mapContainer = document.getElementById('driver-route-map');
+
+        // Default center (Bhubaneswar)
+        let center = [20.2961, 85.8245];
+        let zoom = 11;
+
+        if (routeCoords.length > 0) {
+            center = routeCoords[0];
+            zoom = 13;
+        }
+
+        const driverMap = L.map('driver-route-map').setView(center, zoom);
+        window.driverMap = driverMap;
+
+        // Use system dark mode preference for map tiles
+        const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+        const tileUrl = prefersDark
+            ? 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png'
+            : 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png';
+        L.tileLayer(tileUrl, {
+            attribution: '&copy; OpenStreetMap contributors'
+        }).addTo(driverMap);
+
+        // Draw route polyline
+        if (routeCoords.length > 1) {
+            const polyline = L.polyline(routeCoords, { color: '#0d9488', weight: 4, opacity: 0.8 }).addTo(driverMap);
+            driverMap.fitBounds(polyline.getBounds(), { padding: [30, 30] });
+        }
+
+        // Add stop markers
+        stopsData.forEach(function (st, i) {
+            const icon = L.divIcon({
+                html: '<div style="background:#2563eb;color:white;border-radius:50%;width:22px;height:22px;display:flex;align-items:center;justify-content:center;font-weight:bold;font-size:11px;border:2px solid white;box-shadow:0 1px 4px rgba(0,0,0,0.3);">' + (i + 1) + '</div>',
+                iconSize: [22, 22],
+                iconAnchor: [11, 11],
+                popupAnchor: [0, -11],
+                className: '',
+            });
+            L.marker([st.lat, st.lng], { icon: icon })
+                .addTo(driverMap)
+                .bindPopup('<b>Stop #' + (i + 1) + '</b><br>' + st.name);
+        });
+
+        // Fix Leaflet sizing
+        setTimeout(function () { driverMap.invalidateSize(); }, 300);
+        window.addEventListener('resize', function () {
+            setTimeout(function () { driverMap.invalidateSize(); }, 200);
+        });
+    })();
+</script>
+{% endif %}
+
 <!-- ═══ Route Deviation Alert Banner (fixed, hidden by default) ═══ -->
 {% if route and route.is_active %}
-<div id="deviation-alert"
-     class="hidden fixed top-4 left-1/2 -translate-x-1/2 z-50 max-w-lg w-[90%]
+<div id="deviation-alert" class="hidden fixed top-20 left-1/2 -translate-x-1/2 z-50 max-w-lg w-[90%]
             bg-red-600 text-white px-6 py-4 rounded-2xl shadow-2xl
             flex items-center gap-3 animate-pulse">
     <span class="text-2xl">⚠️</span>
@@ -127,166 +263,191 @@
 
 {% if route and route.is_active %}
 <script>
-(function () {
-    // ── Configuration ──
-    const SEND_INTERVAL_MS = 5000;  // Send location every 5 seconds
-    const UPDATE_URL = "{% url 'update_location' %}";
-    const CSRF_TOKEN = "{{ csrf_token }}";
-    const DEVIATION_THRESHOLD_KM = 1.0;  // 1 km threshold
+    (function () {
+        // ── Configuration ──
+        const SEND_INTERVAL_MS = 5000;  // Send location every 5 seconds
+        const UPDATE_URL = "{% url 'update_location' %}";
+        const CSRF_TOKEN = "{{ csrf_token }}";
+        const DEVIATION_THRESHOLD_KM = 1.0;  // 1 km threshold
 
-    // Route polyline coordinates for deviation detection
-    const routeCoords = JSON.parse('{{ route_coords_json|escapejs }}');
+        // Route polyline coordinates for deviation detection
+        const routeCoords = JSON.parse('{{ route_coords_json|escapejs }}');
 
-    const statusEl = document.getElementById("gps-status");
-    const deviationAlert = document.getElementById("deviation-alert");
-    const deviationDistanceEl = document.getElementById("deviation-distance");
+        const statusEl = document.getElementById("gps-status");
+        const deviationAlert = document.getElementById("deviation-alert");
+        const deviationDistanceEl = document.getElementById("deviation-distance");
 
-    // Request browser notification permission on page load
-    if ("Notification" in window && Notification.permission === "default") {
-        Notification.requestPermission();
-    }
-
-    // Check browser support
-    if (!navigator.geolocation) {
-        statusEl.textContent = "❌ Your browser does not support GPS. Location sharing is unavailable.";
-        statusEl.classList.add("text-red-600");
-        return;
-    }
-
-    let lastLat = null;
-    let lastLng = null;
-    let sendCount = 0;
-    let isDeviated = false;  // Track current deviation state to avoid spamming notifications
-
-    // ── Haversine distance (km) ──
-    function haversineKm(lat1, lon1, lat2, lon2) {
-        const R = 6371;
-        const dLat = (lat2 - lat1) * Math.PI / 180;
-        const dLon = (lon2 - lon1) * Math.PI / 180;
-        const a = Math.sin(dLat / 2) ** 2 +
-                  Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
-                  Math.sin(dLon / 2) ** 2;
-        return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-    }
-
-    // ── Find minimum distance to any point on the route polyline ──
-    function minDistanceToRoute(lat, lng) {
-        if (!routeCoords || routeCoords.length === 0) return 0;
-        let minDist = Infinity;
-        for (const coord of routeCoords) {
-            const d = haversineKm(lat, lng, coord[0], coord[1]);
-            if (d < minDist) minDist = d;
+        // Request browser notification permission on page load
+        if ("Notification" in window && Notification.permission === "default") {
+            Notification.requestPermission();
         }
-        return minDist;
-    }
 
-    // ── Check deviation and show/hide alert ──
-    function checkDeviation(lat, lng) {
-        const dist = minDistanceToRoute(lat, lng);
+        // Check browser support
+        if (!navigator.geolocation) {
+            statusEl.textContent = "❌ Your browser does not support GPS. Location sharing is unavailable.";
+            statusEl.classList.add("text-red-600");
+            return;
+        }
 
-        if (dist > DEVIATION_THRESHOLD_KM) {
-            // Show alert
-            deviationAlert.classList.remove("hidden");
-            deviationDistanceEl.textContent =
-                "You are " + dist.toFixed(1) + " km from the route. Please return.";
+        let lastLat = null;
+        let lastLng = null;
+        let sendCount = 0;
+        let isDeviated = false;  // Track current deviation state to avoid spamming notifications
 
-            // Send browser notification only on first deviation detection
-            if (!isDeviated) {
-                isDeviated = true;
-                if ("Notification" in window && Notification.permission === "granted") {
-                    new Notification("⚠️ Off Route!", {
-                        body: "You are " + dist.toFixed(1) + " km from the route. Please return to the designated route.",
-                        icon: "🚌",
-                        requireInteraction: true,
-                    });
+        let busMarker = null;
+        const busIcon = L.divIcon({
+            html: '<div style="font-size:28px;line-height:1;filter:drop-shadow(1px 2px 2px rgba(0,0,0,0.3));">🚌</div>',
+            iconSize: [32, 32],
+            iconAnchor: [16, 16],
+            popupAnchor: [0, -16],
+            className: '',
+        });
+
+        function updateMapBusMarker(lat, lng) {
+            if (window.driverMap) {
+                if (!busMarker) {
+                    busMarker = L.marker([lat, lng], { icon: busIcon })
+                        .addTo(window.driverMap)
+                        .bindPopup("<b>Your Bus</b><br>Live GPS Position");
+                } else {
+                    busMarker.setLatLng([lat, lng]);
                 }
             }
-        } else {
-            // Hide alert — driver is back on route
-            deviationAlert.classList.add("hidden");
-            isDeviated = false;
         }
-    }
 
-    // ── Send coordinates to server ──
-    function sendLocation(lat, lng) {
-        fetch(UPDATE_URL, {
-            method: "POST",
-            headers: {
-                "Content-Type": "application/json",
-                "X-CSRFToken": CSRF_TOKEN,
+        // ── Haversine distance (km) ──
+        function haversineKm(lat1, lon1, lat2, lon2) {
+            const R = 6371;
+            const dLat = (lat2 - lat1) * Math.PI / 180;
+            const dLon = (lon2 - lon1) * Math.PI / 180;
+            const a = Math.sin(dLat / 2) ** 2 +
+                Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+                Math.sin(dLon / 2) ** 2;
+            return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+        }
+
+        // ── Find minimum distance to any point on the route polyline ──
+        function minDistanceToRoute(lat, lng) {
+            if (!routeCoords || routeCoords.length === 0) return 0;
+            let minDist = Infinity;
+            for (const coord of routeCoords) {
+                const d = haversineKm(lat, lng, coord[0], coord[1]);
+                if (d < minDist) minDist = d;
+            }
+            return minDist;
+        }
+
+        // ── Check deviation and show/hide alert ──
+        function checkDeviation(lat, lng) {
+            const dist = minDistanceToRoute(lat, lng);
+
+            if (dist > DEVIATION_THRESHOLD_KM) {
+                // Show alert
+                deviationAlert.classList.remove("hidden");
+                deviationDistanceEl.textContent =
+                    "You are " + dist.toFixed(1) + " km from the route. Please return.";
+
+                // Send browser notification only on first deviation detection
+                if (!isDeviated) {
+                    isDeviated = true;
+                    if ("Notification" in window && Notification.permission === "granted") {
+                        new Notification("⚠️ Off Route!", {
+                            body: "You are " + dist.toFixed(1) + " km from the route. Please return to the designated route.",
+                            icon: "🚌",
+                            requireInteraction: true,
+                        });
+                    }
+                }
+            } else {
+                // Hide alert — driver is back on route
+                deviationAlert.classList.add("hidden");
+                isDeviated = false;
+            }
+        }
+
+        // ── Send coordinates to server ──
+        function sendLocation(lat, lng) {
+            fetch(UPDATE_URL, {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json",
+                    "X-CSRFToken": CSRF_TOKEN,
+                },
+                body: JSON.stringify({ latitude: lat, longitude: lng }),
+            })
+                .then(function (response) {
+                    if (response.ok) {
+                        sendCount++;
+                        statusEl.innerHTML = '🟢 <span class="font-medium">Sharing location</span> — '
+                            + 'Lat: ' + lat.toFixed(5) + ', Lng: ' + lng.toFixed(5)
+                            + ' <span class="text-gray-400">(update #' + sendCount + ')</span>';
+                        statusEl.className = "text-gray-700 text-sm";
+                    } else {
+                        statusEl.textContent = "⚠️ Server rejected location update. Will retry...";
+                        statusEl.className = "text-amber-600 text-sm";
+                    }
+                })
+                .catch(function () {
+                    statusEl.textContent = "⚠️ Network error. Will retry...";
+                    statusEl.className = "text-amber-600 text-sm";
+                });
+        }
+
+        // ── Watch the device's GPS position ──
+        const watchId = navigator.geolocation.watchPosition(
+            function (position) {
+                lastLat = position.coords.latitude;
+                lastLng = position.coords.longitude;
+
+                // Update bus marker on map
+                updateMapBusMarker(lastLat, lastLng);
+
+                // Check deviation on every GPS update
+                checkDeviation(lastLat, lastLng);
             },
-            body: JSON.stringify({ latitude: lat, longitude: lng }),
-        })
-        .then(function (response) {
-            if (response.ok) {
-                sendCount++;
-                statusEl.innerHTML = '🟢 <span class="font-medium">Sharing location</span> — '
-                    + 'Lat: ' + lat.toFixed(5) + ', Lng: ' + lng.toFixed(5)
-                    + ' <span class="text-gray-400">(update #' + sendCount + ')</span>';
-                statusEl.className = "text-gray-700 text-sm";
-            } else {
-                statusEl.textContent = "⚠️ Server rejected location update. Will retry...";
-                statusEl.className = "text-amber-600 text-sm";
+            function (error) {
+                if (error.code === error.PERMISSION_DENIED) {
+                    statusEl.textContent = "❌ Location permission denied. Please allow location access in your browser settings.";
+                } else {
+                    statusEl.textContent = "⚠️ GPS error: " + error.message + ". Retrying...";
+                }
+                statusEl.className = "text-red-600 text-sm";
+            },
+            {
+                enableHighAccuracy: true,
+                timeout: 15000,
+                maximumAge: 0,
             }
-        })
-        .catch(function () {
-            statusEl.textContent = "⚠️ Network error. Will retry...";
-            statusEl.className = "text-amber-600 text-sm";
+        );
+
+        // ── Send location to server every 5 seconds ──
+        const intervalId = setInterval(function () {
+            if (lastLat !== null && lastLng !== null) {
+                sendLocation(lastLat, lastLng);
+            }
+        }, SEND_INTERVAL_MS);
+
+        // Send immediately once GPS is available (don't wait 5 seconds)
+        navigator.geolocation.getCurrentPosition(
+            function (position) {
+                lastLat = position.coords.latitude;
+                lastLng = position.coords.longitude;
+                sendLocation(lastLat, lastLng);
+                updateMapBusMarker(lastLat, lastLng);
+                checkDeviation(lastLat, lastLng);
+            },
+            function () {
+                // Handled by watchPosition error callback above
+            },
+            { enableHighAccuracy: true, timeout: 15000 }
+        );
+
+        // Clean up when page is unloaded
+        window.addEventListener("beforeunload", function () {
+            navigator.geolocation.clearWatch(watchId);
+            clearInterval(intervalId);
         });
-    }
-
-    // ── Watch the device's GPS position ──
-    const watchId = navigator.geolocation.watchPosition(
-        function (position) {
-            lastLat = position.coords.latitude;
-            lastLng = position.coords.longitude;
-
-            // Check deviation on every GPS update
-            checkDeviation(lastLat, lastLng);
-        },
-        function (error) {
-            if (error.code === error.PERMISSION_DENIED) {
-                statusEl.textContent = "❌ Location permission denied. Please allow location access in your browser settings.";
-            } else {
-                statusEl.textContent = "⚠️ GPS error: " + error.message + ". Retrying...";
-            }
-            statusEl.className = "text-red-600 text-sm";
-        },
-        {
-            enableHighAccuracy: true,
-            timeout: 15000,
-            maximumAge: 0,
-        }
-    );
-
-    // ── Send location to server every 5 seconds ──
-    const intervalId = setInterval(function () {
-        if (lastLat !== null && lastLng !== null) {
-            sendLocation(lastLat, lastLng);
-        }
-    }, SEND_INTERVAL_MS);
-
-    // Send immediately once GPS is available (don't wait 5 seconds)
-    navigator.geolocation.getCurrentPosition(
-        function (position) {
-            lastLat = position.coords.latitude;
-            lastLng = position.coords.longitude;
-            sendLocation(lastLat, lastLng);
-            checkDeviation(lastLat, lastLng);
-        },
-        function () {
-            // Handled by watchPosition error callback above
-        },
-        { enableHighAccuracy: true, timeout: 15000 }
-    );
-
-    // Clean up when page is unloaded
-    window.addEventListener("beforeunload", function () {
-        navigator.geolocation.clearWatch(watchId);
-        clearInterval(intervalId);
-    });
-})();
+    })();
 </script>
 {% endif %}
 {% endblock content %}

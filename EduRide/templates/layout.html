@@ -2,6 +2,7 @@
 {% load static tailwind_tags %}
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
     <meta charset="UTF-8">
     <title>{% block title %}My Site{% endblock %}</title>
@@ -21,7 +22,6 @@
             <!-- Desktop nav -->
             <nav class="hidden md:flex space-x-6">
                 <a href="#" class="hover:text-gray-300">Home</a>
-                <a href="#" class="hover:text-gray-300">Payments</a>
                 <form action="{% url 'student_logout' %}" method="POST">
                     {% csrf_token %}
                     <button type="submit" class="text-red-600 hover:underline">
@@ -31,15 +31,10 @@
             </nav>
 
             <!-- Mobile hamburger -->
-            <button
-                id="menu-btn"
-                class="md:hidden p-2 rounded hover:bg-gray-800"
-                aria-label="Open menu"
-            >
-                <svg xmlns="http://www.w3.org/2000/svg" class="w-6 h-6" fill="none"
-                     viewBox="0 0 24 24" stroke="currentColor">
-                    <path stroke-linecap="round" stroke-linejoin="round"
-                          stroke-width="2" d="M4 6h16M4 12h16M4 18h16"/>
+            <button id="menu-btn" class="md:hidden p-2 rounded hover:bg-gray-800" aria-label="Open menu">
+                <svg xmlns="http://www.w3.org/2000/svg" class="w-6 h-6" fill="none" viewBox="0 0 24 24"
+                    stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16" />
                 </svg>
             </button>
         </div>
@@ -49,21 +44,14 @@
     <div id="mobile-overlay" class="fixed inset-0 bg-black/40 hidden z-40 md:hidden"></div>
 
     <!-- Mobile right drawer -->
-    <div
-        id="mobile-menu"
-        class="fixed top-0 right-0 h-full w-1/2 max-w-xs bg-gray-900 text-white z-50 transform translate-x-full transition-transform duration-300 md:hidden shadow-2xl"
-    >
+    <div id="mobile-menu"
+        class="fixed top-0 right-0 h-full w-1/2 max-w-xs bg-gray-900 text-white z-50 transform translate-x-full transition-transform duration-300 md:hidden shadow-2xl">
         <div class="flex justify-between items-center px-4 py-4 border-b border-gray-700">
             <h2 class="text-lg font-semibold">Menu</h2>
-            <button
-                id="close-menu"
-                class="p-2 rounded hover:bg-gray-800"
-                aria-label="Close menu"
-            >
-                <svg xmlns="http://www.w3.org/2000/svg" class="w-6 h-6" fill="none"
-                     viewBox="0 0 24 24" stroke="currentColor">
-                    <path stroke-linecap="round" stroke-linejoin="round"
-                          stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+            <button id="close-menu" class="p-2 rounded hover:bg-gray-800" aria-label="Close menu">
+                <svg xmlns="http://www.w3.org/2000/svg" class="w-6 h-6" fill="none" viewBox="0 0 24 24"
+                    stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
                 </svg>
             </button>
         </div>
@@ -71,7 +59,6 @@
         <!-- Mobile drawer navigation links -->
         <nav class="flex flex-col p-4 space-y-4">
             <a href="{% url 'home' %}" class="hover:text-gray-300">Home</a>
-            <a href="#" class="hover:text-gray-300">Payments</a>
             <!-- Logout form uses POST to prevent CSRF logout attacks -->
             <form action="{% url 'student_logout' %}" method="POST">
                 {% csrf_token %}
@@ -119,4 +106,5 @@
     </script>
 
 </body>
+
 </html>
