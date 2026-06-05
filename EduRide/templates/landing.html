@@ -1,0 +1,190 @@
+{% load static %}
+{% load static tailwind_tags %}
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>EduRide | Smart Campus Transport</title>
+    {% tailwind_css %}
+</head>
+
+<body class="bg-slate-950 text-white">
+    <header class="sticky top-0 z-50 border-b border-white/10 bg-slate-950/85 backdrop-blur">
+        <div class="mx-auto flex max-w-7xl items-center justify-between px-4 py-4 sm:px-6 lg:px-8">
+            <a href="{% url 'landing' %}" class="flex items-center">
+                <img src="{% static 'images/eduride_logo.png' %}" alt="EduRide logo" class="h-14 w-auto rounded-2xl object-contain shadow-lg shadow-blue-500/20">
+            </a>
+            <nav class="hidden items-center gap-8 text-sm text-slate-300 md:flex">
+                <a href="#how-it-works" class="hover:text-white">How it works</a>
+                <a href="#payment" class="hover:text-white">Payment plan</a>
+                <a href="#login" class="hover:text-white">Login</a>
+            </nav>
+            <a href="{% url 'student_signin' %}" class="rounded-full bg-white px-5 py-2 text-sm font-semibold text-slate-950 transition hover:bg-blue-100">
+                Student Login
+            </a>
+        </div>
+    </header>
+
+    <main>
+        <section class="relative overflow-hidden">
+            <div class="absolute left-1/2 top-0 h-[32rem] w-[32rem] -translate-x-1/2 rounded-full bg-blue-500/20 blur-3xl"></div>
+            <div class="relative mx-auto grid max-w-7xl items-center gap-12 px-4 py-20 sm:px-6 lg:grid-cols-[1.05fr_0.95fr] lg:px-8 lg:py-28">
+                <div>
+                    <p class="mb-5 inline-flex rounded-full border border-blue-300/30 bg-blue-400/10 px-4 py-2 text-sm font-medium text-blue-100">
+                        Live campus bus tracking for students, institutes, and drivers
+                    </p>
+                    <h1 class="max-w-4xl text-4xl font-black tracking-tight text-white sm:text-6xl">
+                        Make every campus ride visible, safer, and easier to manage.
+                    </h1>
+                    <p class="mt-6 max-w-2xl text-lg leading-8 text-slate-300">
+                        EduRide connects institutes, drivers, and students in one transport system. Institutes create routes and schedules, drivers share live location, and students track buses with stop-wise details.
+                    </p>
+                    <div class="mt-8 flex flex-col gap-3 sm:flex-row">
+                        <a href="{% url 'institute_signin' %}" class="rounded-full bg-blue-500 px-7 py-3 text-center font-semibold text-white shadow-xl shadow-blue-500/25 transition hover:bg-blue-400">
+                            Institute Login
+                        </a>
+                        <a href="#login" class="rounded-full border border-white/15 px-7 py-3 text-center font-semibold text-white transition hover:bg-white/10">
+                            Choose Your Portal
+                        </a>
+                    </div>
+                </div>
+
+                <div class="rounded-[2rem] border border-white/10 bg-white/10 p-4 shadow-2xl shadow-blue-950/40 backdrop-blur">
+                    <div class="rounded-[1.5rem] bg-slate-900 p-5">
+                        <div class="mb-5 flex items-center justify-between">
+                            <div>
+                                <p class="text-sm text-slate-400">Live Route</p>
+                                <h2 class="text-2xl font-bold">Campus Shuttle A</h2>
+                            </div>
+                            <span class="rounded-full bg-emerald-400/15 px-3 py-1 text-sm font-semibold text-emerald-300">● Active</span>
+                        </div>
+                        <div class="relative h-72 overflow-hidden rounded-3xl bg-gradient-to-br from-slate-800 via-slate-900 to-blue-950">
+                            <div class="absolute left-8 top-10 h-44 w-56 rotate-[-20deg] rounded-full border-4 border-dashed border-blue-300/35"></div>
+                            <div class="absolute bottom-10 right-8 h-36 w-48 rotate-12 rounded-full border-4 border-dashed border-emerald-300/35"></div>
+                            <div class="absolute left-12 top-12 rounded-2xl bg-white px-4 py-3 text-slate-900 shadow-xl">
+                                <p class="text-xs font-semibold text-slate-500">Next stop</p>
+                                <p class="font-bold">Library Gate · 6 min</p>
+                            </div>
+                            <div class="absolute bottom-12 right-10 flex h-16 w-16 items-center justify-center rounded-3xl bg-blue-500 text-3xl shadow-2xl shadow-blue-500/40">🚌</div>
+                            <div class="absolute bottom-6 left-6 rounded-2xl bg-slate-950/85 p-4 text-sm text-slate-200">
+                                <p class="font-semibold text-white">Driver GPS syncing</p>
+                                <p class="text-slate-400">Updated every few seconds</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <section id="how-it-works" class="bg-white py-20 text-slate-900">
+            <div class="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+                <div class="max-w-3xl">
+                    <p class="text-sm font-bold uppercase tracking-[0.2em] text-blue-600">How EduRide Works</p>
+                    <h2 class="mt-3 text-3xl font-black sm:text-4xl">Simple flow, powerful control.</h2>
+                    <p class="mt-4 text-lg text-slate-600">
+                        Each role gets a focused dashboard so the transport operation stays organized from route creation to student tracking.
+                    </p>
+                </div>
+
+                <div class="mt-12 grid gap-6 md:grid-cols-3">
+                    <div class="rounded-3xl border border-slate-200 bg-slate-50 p-6">
+                        <div class="mb-5 flex h-12 w-12 items-center justify-center rounded-2xl bg-blue-100 text-2xl">🏫</div>
+                        <h3 class="text-xl font-bold">Institute manages routes</h3>
+                        <p class="mt-3 text-slate-600">Admins add buses, draw routes, set stops, create schedules, assign drivers, and manage student or driver accounts.</p>
+                    </div>
+                    <div class="rounded-3xl border border-slate-200 bg-slate-50 p-6">
+                        <div class="mb-5 flex h-12 w-12 items-center justify-center rounded-2xl bg-emerald-100 text-2xl">🚍</div>
+                        <h3 class="text-xl font-bold">Driver shares live status</h3>
+                        <p class="mt-3 text-slate-600">Drivers see their assigned route, start or end trips, and safely update live bus location for the institute and students.</p>
+                    </div>
+                    <div class="rounded-3xl border border-slate-200 bg-slate-50 p-6">
+                        <div class="mb-5 flex h-12 w-12 items-center justify-center rounded-2xl bg-amber-100 text-2xl">🎓</div>
+                        <h3 class="text-xl font-bold">Students track buses</h3>
+                        <p class="mt-3 text-slate-600">Students join using their institute code and view active buses, route stops, schedules, and estimated arrival information.</p>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <section id="payment" class="bg-slate-100 py-20 text-slate-900">
+            <div class="mx-auto grid max-w-7xl items-center gap-10 px-4 sm:px-6 lg:grid-cols-[0.9fr_1.1fr] lg:px-8">
+                <div>
+                    <p class="text-sm font-bold uppercase tracking-[0.2em] text-blue-600">Payment Plan</p>
+                    <h2 class="mt-3 text-3xl font-black sm:text-4xl">One institute activation. Everyone gets moving.</h2>
+                    <p class="mt-4 text-lg text-slate-600">
+                        EduRide uses a straightforward institute activation plan. Once the institute completes payment, students and drivers can register with the institute code and start using their portals.
+                    </p>
+                </div>
+                <div class="rounded-[2rem] bg-slate-950 p-8 text-white shadow-2xl">
+                    <div class="flex flex-col justify-between gap-6 sm:flex-row sm:items-start">
+                        <div>
+                            <p class="text-sm font-semibold uppercase tracking-[0.2em] text-blue-300">Activation Plan</p>
+                            <div class="mt-4 flex items-end gap-2">
+                                <span class="text-2xl text-slate-300">₹</span>
+                                <span class="text-6xl font-black">499</span>
+                            </div>
+                            <p class="mt-2 text-slate-400">Institute setup and dashboard activation</p>
+                        </div>
+                        <a href="{% url 'institute_signin' %}" class="rounded-full bg-blue-500 px-6 py-3 text-center font-semibold text-white transition hover:bg-blue-400">
+                            Activate Institute
+                        </a>
+                    </div>
+                    <div class="mt-8 grid gap-3 text-sm text-slate-300 sm:grid-cols-2">
+                        <p class="rounded-2xl bg-white/10 p-4">✓ Route and bus management</p>
+                        <p class="rounded-2xl bg-white/10 p-4">✓ Driver assignment tools</p>
+                        <p class="rounded-2xl bg-white/10 p-4">✓ Student access by institute code</p>
+                        <p class="rounded-2xl bg-white/10 p-4">✓ Razorpay-powered activation</p>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <section id="login" class="bg-white py-20 text-slate-900">
+            <div class="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+                <div class="text-center">
+                    <p class="text-sm font-bold uppercase tracking-[0.2em] text-blue-600">Login Portals</p>
+                    <h2 class="mt-3 text-3xl font-black sm:text-4xl">Continue as your role.</h2>
+                    <p class="mx-auto mt-4 max-w-2xl text-lg text-slate-600">
+                        Choose the right login page and EduRide will take you to the matching dashboard after sign in.
+                    </p>
+                </div>
+
+                <div class="mt-12 grid gap-6 md:grid-cols-3">
+                    <a href="{% url 'student_signin' %}" class="group rounded-3xl border border-slate-200 p-6 shadow-sm transition hover:-translate-y-1 hover:border-blue-300 hover:shadow-xl">
+                        <div class="mb-6 flex h-14 w-14 items-center justify-center rounded-2xl bg-blue-100 text-3xl transition group-hover:bg-blue-500">🎓</div>
+                        <h3 class="text-2xl font-bold">Student Login</h3>
+                        <p class="mt-3 text-slate-600">Track live buses, view stops, and check your route schedule.</p>
+                        <span class="mt-6 inline-flex font-semibold text-blue-600">Go to student login →</span>
+                    </a>
+                    <a href="{% url 'institute_signin' %}" class="group rounded-3xl border border-slate-200 p-6 shadow-sm transition hover:-translate-y-1 hover:border-blue-300 hover:shadow-xl">
+                        <div class="mb-6 flex h-14 w-14 items-center justify-center rounded-2xl bg-indigo-100 text-3xl transition group-hover:bg-indigo-500">🏫</div>
+                        <h3 class="text-2xl font-bold">Institute Login</h3>
+                        <p class="mt-3 text-slate-600">Manage routes, buses, drivers, students, and activation payment.</p>
+                        <span class="mt-6 inline-flex font-semibold text-blue-600">Go to institute login →</span>
+                    </a>
+                    <a href="{% url 'driver_signin' %}" class="group rounded-3xl border border-slate-200 p-6 shadow-sm transition hover:-translate-y-1 hover:border-blue-300 hover:shadow-xl">
+                        <div class="mb-6 flex h-14 w-14 items-center justify-center rounded-2xl bg-emerald-100 text-3xl transition group-hover:bg-emerald-500">🚍</div>
+                        <h3 class="text-2xl font-bold">Driver Login</h3>
+                        <p class="mt-3 text-slate-600">Start trips, see assigned routes, and share live bus location.</p>
+                        <span class="mt-6 inline-flex font-semibold text-blue-600">Go to driver login →</span>
+                    </a>
+                </div>
+            </div>
+        </section>
+    </main>
+
+    <footer class="border-t border-white/10 bg-slate-950">
+        <div class="mx-auto flex max-w-7xl flex-col gap-3 px-4 py-8 text-sm text-slate-400 sm:flex-row sm:items-center sm:justify-between sm:px-6 lg:px-8">
+            <p>© 2026 EduRide. Smart transport for education campuses.</p>
+            <div class="flex gap-5">
+                <a href="#how-it-works" class="hover:text-white">How it works</a>
+                <a href="#payment" class="hover:text-white">Payment</a>
+                <a href="#login" class="hover:text-white">Login</a>
+            </div>
+        </div>
+    </footer>
+</body>
+
+</html>

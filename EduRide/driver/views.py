@@ -1,4 +1,5 @@
 import json
+import datetime
 
 from django.shortcuts import render, redirect
 from django.db import transaction
@@ -15,7 +16,7 @@ from django.contrib import messages
 from django.contrib.auth.models import User
 
 from student.models import UserProfile
-from institute.models import Institute, Route
+from institute.models import Institute, Route, BusSchedule
 
 
 def _get_assigned_route(user):
@@ -33,15 +34,35 @@ def _get_assigned_route(user):
 
 @driver_required
 def driver_dashboard(request):
-    """Driver dashboard — shows assigned route and trip controls."""
+    """Driver dashboard — shows assigned route, schedules, stops, and trip controls."""
     route = _get_assigned_route(request.user)
 
     # Pass route coordinates as JSON for client-side deviation detection.
     route_coords_json = json.dumps(route.coordinates) if route and route.coordinates else "[]"
 
+    # Build schedule and stop data for the dashboard display.
+    schedules_data = []
+    stops_data = []
+    if route:
+        for s in route.schedules.all().order_by("departure_time"):
+            schedules_data.append({
+                "label": s.label,
+                "time": s.departure_time.strftime("%I:%M %p"),
+            })
+        for st in route.stops.all().order_by("order_index"):
+            stops_data.append({
+                "name": st.name,
+                "lat": st.latitude,
+                "lng": st.longitude,
+                "order": st.order_index,
+                "eta_minutes": st.eta_minutes,
+            })
+
     return render(request, "driver/dashboard.html", {
         "route": route,
         "route_coords_json": route_coords_json,
+        "schedules_data": schedules_data,
+        "stops_data_json": json.dumps(stops_data),
     })
 
 
@@ -69,9 +90,58 @@ def toggle_trip(request):
     else:
         route.save(update_fields=["is_active"])
 
+        # ── Off-schedule warning ──
+        # Check if the current time is within ±15 minutes of any scheduled
+        # departure time. If not, warn the driver (but still allow the trip).
+        _check_off_schedule_warning(request, route)
+
     status = "started" if route.is_active else "ended"
     messages.success(request, f"Trip {status} for bus {route.bus_no}.")
     return redirect("driver_dashboard")
+
+
+def _check_off_schedule_warning(request, route):
+    """
+    Warn the driver if they are starting a trip outside any scheduled window.
+
+    Compares the current local time against all BusSchedule departure times
+    for this route. If no schedule is within ±15 minutes, adds a warning
+    message with the nearest upcoming schedule.
+    """
+    TOLERANCE_MINUTES = 15
+    schedules = route.schedules.all()
+    if not schedules.exists():
+        # No schedules defined — nothing to check.
+        return
+
+    now_local = timezone.localtime().time()
+    now_minutes = now_local.hour * 60 + now_local.minute
+
+    nearest_label = None
+    nearest_time_str = None
+    smallest_diff = float("inf")
+
+    for s in schedules:
+        dep_minutes = s.departure_time.hour * 60 + s.departure_time.minute
+        diff = abs(now_minutes - dep_minutes)
+        # Handle midnight wraparound (e.g., 23:55 vs 00:05 = 10 min, not 1430)
+        diff = min(diff, 1440 - diff)
+
+        if diff <= TOLERANCE_MINUTES:
+            # Within the window of at least one schedule — no warning needed.
+            return
+
+        if diff < smallest_diff:
+            smallest_diff = diff
+            nearest_label = s.label
+            nearest_time_str = s.departure_time.strftime("%I:%M %p")
+
+    # No schedule matched — warn the driver.
+    messages.warning(
+        request,
+        f"⚠️ No scheduled departure at this time. "
+        f"Nearest schedule is \"{nearest_label}\" at {nearest_time_str}.",
+    )
 
 
 # ---------------------------------------------------------------------------

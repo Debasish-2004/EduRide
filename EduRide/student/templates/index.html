@@ -80,6 +80,28 @@
                         <!-- Populated by JS -->
                     </div>
                 </div>
+
+                <!-- ═══ Live ETA Section ═══ -->
+                <div id="eta-section" class="hidden border-t border-gray-200">
+                    <!-- Stop Selector -->
+                    <div class="px-4 py-3 border-b border-gray-100">
+                        <p class="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-2">🎯 Select Your Stop</p>
+                        <select id="eta-stop-select"
+                            class="w-full px-3 py-2 rounded-lg border border-gray-300 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400 transition bg-white">
+                            <option value="">-- Choose a stop --</option>
+                        </select>
+                    </div>
+
+                    <!-- Live ETA Display -->
+                    <div id="eta-display" class="hidden px-4 py-4">
+                        <div id="eta-card" class="rounded-xl p-4 text-center">
+                            <div id="eta-icon" class="text-3xl mb-1">🚌</div>
+                            <p id="eta-text" class="text-sm font-medium text-gray-700"></p>
+                            <p id="eta-time" class="text-2xl font-bold text-blue-600 mt-1"></p>
+                            <p id="eta-subtext" class="text-xs text-gray-400 mt-1"></p>
+                        </div>
+                    </div>
+                </div>
             </div>
 
         </div>
@@ -100,6 +122,8 @@
     //json style buses data. Each bus includes a small "routeCoords" polyline for display. now from db..
 
    const buses = JSON.parse(document.getElementById("buses-data").textContent);
+
+
 
    //Available in Leaflet.js website . overview section...
     const map = L.map('map').setView([20.2961, 85.8245], 11);
@@ -211,6 +235,13 @@
     let currentStopMarkers = [];  // Stop markers on the map for route detail
     let selectedBusId = null;     // Currently viewing route detail
     let selectedScheduleIdx = 0;  // Currently selected schedule tab
+    let selectedStopData = null;   // Stop selected by student for ETA
+    let latestBusPositions = {};   // Latest live positions from polling { busId: {lat, lng, is_active} }
+
+    // Seed initial bus positions for ETA calculations (before first poll)
+    buses.forEach(bus => {
+        latestBusPositions[bus.id] = { lat: bus.lat, lng: bus.lng, is_active: bus.is_active };
+    });
 
     // ── Panel switching ──
     const panelBusList = document.getElementById("panel-bus-list");
@@ -290,10 +321,35 @@
         }
 
         markers[bus.id].openPopup();
+
+        // ── Pre-compute route metadata for ETA calculations ──
+        if (bus.routeCoords && bus.routeCoords.length > 1 && bus.stops && bus.stops.length > 0) {
+            const cumulativeDists = computeCumulativeDistances(bus.routeCoords);
+            const totalRouteKm = cumulativeDists[cumulativeDists.length - 1];
+
+            // Project each stop onto the route polyline
+            const stopRoutePositions = bus.stops.map(st =>
+                projectOntoRoute(st.lat, st.lng, bus.routeCoords, cumulativeDists)
+            );
+
+            currentRouteMetadata = {
+                busId: bus.id,
+                routeCoords: bus.routeCoords,
+                cumulativeDists: cumulativeDists,
+                totalRouteKm: totalRouteKm,
+                stopRoutePositions: stopRoutePositions,
+            };
+        } else {
+            currentRouteMetadata = null;
+        }
+
+        // ── Live ETA: populate stop selector ──
+        populateEtaSelector(bus);
     }
 
     function showBusList() {
         selectedBusId = null;
+        currentRouteMetadata = null;
 
         panelRouteDetail.classList.add("hidden");
         panelBusList.classList.remove("hidden");
@@ -398,7 +454,10 @@
     }
 
     // ── Back button ──
-    document.getElementById("back-to-list-btn").addEventListener("click", showBusList);
+    document.getElementById("back-to-list-btn").addEventListener("click", function() {
+        selectedStopData = null;  // Clear ETA selection
+        showBusList();
+    });
 
     //listing the cards in buslist...
     if (buses.length === 0) {
@@ -558,6 +617,13 @@
                     const marker = markers[bus.id];
                     if (!marker) return;  // Bus wasn't on the initial page load
 
+                    // Store latest position for ETA calculation
+                    latestBusPositions[bus.id] = {
+                        lat: bus.lat,
+                        lng: bus.lng,
+                        is_active: bus.is_active,
+                    };
+
                     // ── Move the marker to the new position ──
                     marker.setLatLng([bus.lat, bus.lng]);
 
@@ -608,6 +674,9 @@
                         }
                     }
                 });
+
+                // Update ETA display with latest positions
+                updateEtaDisplay();
             })
             .catch(() => {
                 // Silently retry on next interval — don't break the UI
@@ -618,6 +687,233 @@
     setTimeout(() => {
         setInterval(pollBusLocations, POLL_INTERVAL_MS);
     }, POLL_INTERVAL_MS);
+
+
+    // =====================================================================
+    //  LIVE ETA SYSTEM — Select a stop and see estimated arrival time
+    // =====================================================================
+
+    const etaSection = document.getElementById('eta-section');
+    const etaStopSelect = document.getElementById('eta-stop-select');
+    const etaDisplay = document.getElementById('eta-display');
+    const etaCard = document.getElementById('eta-card');
+    const etaIcon = document.getElementById('eta-icon');
+    const etaText = document.getElementById('eta-text');
+    const etaTime = document.getElementById('eta-time');
+    const etaSubtext = document.getElementById('eta-subtext');
+
+    /**
+     * Haversine distance in km between two lat/lng points.
+     */
+    function haversineKm(lat1, lon1, lat2, lon2) {
+        const R = 6371;
+        const dLat = (lat2 - lat1) * Math.PI / 180;
+        const dLon = (lon2 - lon1) * Math.PI / 180;
+        const a = Math.sin(dLat / 2) ** 2 +
+            Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+            Math.sin(dLon / 2) ** 2;
+        return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+    }
+
+    // =====================================================================
+    //  ROUTE PROJECTION UTILITIES — for route-aware ETA calculation
+    // =====================================================================
+
+    /**
+     * Pre-compute cumulative distances (in km) along a route polyline.
+     * Returns an array where cumulativeDists[i] = total km from coord[0] to coord[i].
+     */
+    function computeCumulativeDistances(routeCoords) {
+        const dists = [0];
+        for (let i = 1; i < routeCoords.length; i++) {
+            const segDist = haversineKm(
+                routeCoords[i - 1][0], routeCoords[i - 1][1],
+                routeCoords[i][0], routeCoords[i][1]
+            );
+            dists.push(dists[i - 1] + segDist);
+        }
+        return dists;
+    }
+
+    /**
+     * Project a point onto the route polyline and return the cumulative
+     * distance (in km) along the route to that projected point.
+     *
+     * For each segment of the polyline, we find the closest point on that
+     * segment to (lat, lng), then pick the segment that gives the smallest
+     * perpendicular distance. The result is the cumulative km from the
+     * route start to the projected point.
+     */
+    function projectOntoRoute(lat, lng, routeCoords, cumulativeDists) {
+        let bestDist = Infinity;
+        let bestCumulativeKm = 0;
+
+        for (let i = 0; i < routeCoords.length - 1; i++) {
+            const ax = routeCoords[i][0], ay = routeCoords[i][1];
+            const bx = routeCoords[i + 1][0], by = routeCoords[i + 1][1];
+
+            // Vector from A to B and A to P
+            const abx = bx - ax, aby = by - ay;
+            const apx = lat - ax, apy = lng - ay;
+
+            // Project P onto line AB, clamped to [0, 1]
+            const ab2 = abx * abx + aby * aby;
+            let t = ab2 === 0 ? 0 : (apx * abx + apy * aby) / ab2;
+            t = Math.max(0, Math.min(1, t));
+
+            // Closest point on segment
+            const closestLat = ax + t * abx;
+            const closestLng = ay + t * aby;
+
+            const d = haversineKm(lat, lng, closestLat, closestLng);
+            if (d < bestDist) {
+                bestDist = d;
+                // Cumulative distance = distance to start of this segment + fraction of segment
+                const segLen = cumulativeDists[i + 1] - cumulativeDists[i];
+                bestCumulativeKm = cumulativeDists[i] + t * segLen;
+            }
+        }
+
+        return bestCumulativeKm;
+    }
+
+    // Cached route metadata for the currently viewed bus (set in showRouteDetail)
+    let currentRouteMetadata = null;
+
+    /**
+     * Populate the ETA stop selector when viewing a bus route detail.
+     */
+    function populateEtaSelector(bus) {
+        selectedStopData = null;
+
+        // Only show ETA section if the bus has stops
+        if (!bus.stops || bus.stops.length === 0) {
+            etaSection.classList.add('hidden');
+            return;
+        }
+
+        etaSection.classList.remove('hidden');
+        etaDisplay.classList.add('hidden');
+
+        // Build options
+        let optionsHtml = '<option value="">-- Choose a stop --</option>';
+        bus.stops.forEach((st, i) => {
+            optionsHtml += '<option value="' + i + '">Stop #' + (i + 1) + ' — ' + st.name + '</option>';
+        });
+        etaStopSelect.innerHTML = optionsHtml;
+
+        // Handle selection
+        etaStopSelect.onchange = function () {
+            const idx = parseInt(this.value);
+            if (isNaN(idx)) {
+                selectedStopData = null;
+                etaDisplay.classList.add('hidden');
+                return;
+            }
+
+            selectedStopData = {
+                busId: bus.id,
+                stopIdx: idx,
+                stopName: bus.stops[idx].name,
+                stopLat: bus.stops[idx].lat,
+                stopLng: bus.stops[idx].lng,
+                etaMinutes: bus.stops[idx].eta_minutes,
+            };
+
+            etaDisplay.classList.remove('hidden');
+            updateEtaDisplay();
+        };
+    }
+
+    /**
+     * Update the ETA display using the latest bus position.
+     *
+     * Uses ROUTE-AWARE distance calculation:
+     * 1. Projects the bus's live GPS onto the route polyline
+     * 2. Compares the bus's route position to the stop's route position
+     * 3. Calculates remaining distance ALONG THE ROUTE (not straight-line)
+     * 4. Respects stop ordering — bus must pass earlier stops first
+     * 5. Shows "Passed" if the bus has already gone past the stop
+     */
+    function updateEtaDisplay() {
+        if (!selectedStopData) return;
+
+        const busId = selectedStopData.busId;
+        const busPos = latestBusPositions[busId];
+
+        // If bus is not active
+        if (!busPos || !busPos.is_active) {
+            etaCard.className = 'rounded-xl p-4 text-center bg-gray-50 border border-gray-200';
+            etaIcon.textContent = '⚪';
+            etaText.textContent = 'Bus is currently offline';
+            etaText.className = 'text-sm font-medium text-gray-500';
+            etaTime.textContent = 'Not Available';
+            etaTime.className = 'text-2xl font-bold text-gray-400 mt-1';
+            etaSubtext.textContent = 'The bus will start sharing location when the trip begins';
+            return;
+        }
+
+        const avgSpeedKmH = 40;
+        const stopIdx = selectedStopData.stopIdx;
+
+        // ── Route-aware ETA calculation ──
+        if (currentRouteMetadata && currentRouteMetadata.busId === busId) {
+            const meta = currentRouteMetadata;
+
+            // Project the bus's live position onto the route
+            const busRouteKm = projectOntoRoute(
+                busPos.lat, busPos.lng,
+                meta.routeCoords, meta.cumulativeDists
+            );
+
+            // Get the stop's pre-computed position on the route
+            const stopRouteKm = meta.stopRoutePositions[stopIdx];
+
+            // Remaining distance along the route
+            const remainingKm = stopRouteKm - busRouteKm;
+
+            if (remainingKm < -0.15) {
+                // Bus has already passed this stop (more than 150m past)
+                etaCard.className = 'rounded-xl p-4 text-center bg-amber-50 border border-amber-200';
+                etaIcon.textContent = '⏩';
+                etaText.textContent = 'Bus has passed ' + selectedStopData.stopName;
+                etaText.className = 'text-sm font-medium text-amber-700';
+                etaTime.textContent = 'Passed';
+                etaTime.className = 'text-2xl font-bold text-amber-500 mt-1';
+                etaSubtext.textContent = 'The bus passed this stop ' + Math.abs(remainingKm).toFixed(1) + ' km ago';
+            } else if (remainingKm <= 0.3) {
+                // Bus is arriving (within 300m along the route)
+                etaCard.className = 'rounded-xl p-4 text-center bg-green-50 border border-green-200';
+                etaIcon.textContent = '🎉';
+                etaText.textContent = 'Bus is arriving at ' + selectedStopData.stopName + '!';
+                etaText.className = 'text-sm font-medium text-green-700';
+                etaTime.textContent = 'Arriving Now';
+                etaTime.className = 'text-2xl font-bold text-green-600 mt-1';
+                etaSubtext.textContent = (remainingKm > 0 ? remainingKm.toFixed(1) : '0.0') + ' km away along route';
+            } else {
+                // Bus is en route — calculate ETA from route distance
+                const etaMinutes = Math.round((remainingKm / avgSpeedKmH) * 60);
+                etaCard.className = 'rounded-xl p-4 text-center bg-blue-50 border border-blue-200';
+                etaIcon.textContent = '🚌';
+                etaText.textContent = 'Estimated arrival at ' + selectedStopData.stopName;
+                etaText.className = 'text-sm font-medium text-gray-700';
+                etaTime.textContent = etaMinutes + ' min';
+                etaTime.className = 'text-2xl font-bold text-blue-600 mt-1';
+                etaSubtext.textContent = remainingKm.toFixed(1) + ' km along route • ~' + avgSpeedKmH + ' km/h avg';
+            }
+        } else {
+            // Fallback: no route metadata available — use scheduled eta_minutes
+            // This is still better than straight-line distance
+            const scheduledEta = selectedStopData.etaMinutes;
+            etaCard.className = 'rounded-xl p-4 text-center bg-blue-50 border border-blue-200';
+            etaIcon.textContent = '🚌';
+            etaText.textContent = 'Scheduled arrival at ' + selectedStopData.stopName;
+            etaText.className = 'text-sm font-medium text-gray-700';
+            etaTime.textContent = scheduledEta + ' min';
+            etaTime.className = 'text-2xl font-bold text-blue-600 mt-1';
+            etaSubtext.textContent = 'Based on scheduled timetable (no live route data)';
+        }
+    }
 
 </script>
 {% endblock %}

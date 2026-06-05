@@ -14,9 +14,14 @@ from .decorators import student_required
 from django.contrib.auth import authenticate, login, logout
 from django.contrib import messages
 from django.contrib.auth.models import User
+from institute.route_eta import compute_eta_minutes
 
 # Import UserProfile so we can create one during signup.
 from .models import UserProfile
+
+
+def landing_page(request):
+    return render(request, "landing.html")
 
 
 def _safe_coord(coordinates, index, default):
@@ -44,6 +49,18 @@ def home(request):
 
     buses = []
     for route in routes:
+        stops = [
+            {
+                "name": st.name,
+                "lat": st.latitude,
+                "lng": st.longitude,
+                "order": st.order_index,
+                "eta_minutes": st.eta_minutes,
+            }
+            for st in route.stops.all()
+        ]
+        compute_eta_minutes(stops, route.coordinates)
+
         buses.append({
             "id": route.id,
             "bus_no": route.bus_no,
@@ -62,16 +79,7 @@ def home(request):
                 }
                 for s in route.schedules.all()
             ],
-            "stops": [
-                {
-                    "name": st.name,
-                    "lat": st.latitude,
-                    "lng": st.longitude,
-                    "order": st.order_index,
-                    "eta_minutes": st.eta_minutes,
-                }
-                for st in route.stops.all()
-            ],
+            "stops": stops,
         })
 
     return render(request, "index.html", {

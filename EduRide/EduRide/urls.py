@@ -16,11 +16,13 @@ Including another URLconf
 """
 from django.contrib import admin
 from django.urls import include, path
+from student.views import landing_page
 
 urlpatterns = [
     path('admin/', admin.site.urls),
     path("__reload__/", include("django_browser_reload.urls")),
-    path('', include('student.urls')),
+    path('', landing_page, name='landing'),
+    path('student/', include('student.urls')),
     path('institute/', include('institute.urls')),
     path('driver/', include('driver.urls')),
 ]
