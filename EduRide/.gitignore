@@ -23,3 +23,6 @@ Thumbs.db
 
 # Node (Tailwind)
 node_modules/
+
+# Django Static Assets (generated on deploy)
+staticfiles/
