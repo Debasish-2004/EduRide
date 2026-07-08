@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 """Django's command-line utility for administrative tasks."""
-import os
-import sys
+import os #Used for interacting with environment variables.
+import sys #Contains information about the program being executed.
 
 
 def main():

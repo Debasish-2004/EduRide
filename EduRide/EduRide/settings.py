@@ -15,28 +15,27 @@ from pathlib import Path
 
 load_dotenv()
 
-# Build paths inside the project like this: BASE_DIR / 'subdir'.
+# path to the base directory ,, .parent for the parent file 
+# of this file and grand parent .. so it will point to the EduRIde folder
 BASE_DIR = Path(__file__).resolve().parent.parent
 
 
-# Quick-start development settings - unsuitable for production
-# See https://docs.djangoproject.com/en/6.0/howto/deployment/checklist/
 
-# SECURITY WARNING: keep the secret key used in production secret!
-# Read from environment variable. Falls back to dev key for local development.
-SECRET_KEY = os.environ.get(
-    'DJANGO_SECRET_KEY',
-    'django-insecure-+14i8sg)58k!n4y@=qtr7^4lrs!bir5u#6vex93@z627atk#oz'
-)
+# SECURITY WARNING: keep the secret key used in production secret in .env!
 
-# SECURITY WARNING: don't run with debug turned on in production!
+SECRET_KEY = os.environ.get("DJANGO_SECRET_KEY")
+
+# when the web is depoloyed then the debug will false .
+#  as the debug can leak sensitive information in production.
 DEBUG = 'RENDER' not in os.environ
 
+#this is the allowed host both on local machine and after the deployment.
 ALLOWED_HOSTS = ['localhost', '127.0.0.1']
 RENDER_EXTERNAL_HOSTNAME = os.environ.get('RENDER_EXTERNAL_HOSTNAME')
 if RENDER_EXTERNAL_HOSTNAME:
     ALLOWED_HOSTS.append(RENDER_EXTERNAL_HOSTNAME)
 
+#this checks if the submitted form is from a trusted website and csrf verified.
 CSRF_TRUSTED_ORIGINS = []
 if RENDER_EXTERNAL_HOSTNAME:
     CSRF_TRUSTED_ORIGINS.append(f'https://{RENDER_EXTERNAL_HOSTNAME}')
@@ -56,7 +55,7 @@ INSTALLED_APPS = [
     'driver',
     'tailwind',
     'theme',
-     "django_browser_reload",
+    "django_browser_reload",
 ]
 
 TAILWIND_APP_NAME ='theme'
@@ -70,7 +69,7 @@ MIDDLEWARE = [
     'django.contrib.auth.middleware.AuthenticationMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
-     "django_browser_reload.middleware.BrowserReloadMiddleware",
+    "django_browser_reload.middleware.BrowserReloadMiddleware",
 ]
 
 ROOT_URLCONF = 'EduRide.urls'
@@ -89,12 +88,11 @@ TEMPLATES = [
         },
     },
 ]
-
+#"Tells - When someone visits my website, use the application object inside the wsgi.py file. after deployment"
 WSGI_APPLICATION = 'EduRide.wsgi.application'
 
 
-# Database
-# https://docs.djangoproject.com/en/6.0/ref/settings/#databases
+
 
 import dj_database_url
 
@@ -106,8 +104,7 @@ DATABASES = {
 }
 
 
-# Password validation
-# https://docs.djangoproject.com/en/6.0/ref/settings/#auth-password-validators
+#built-in password validator classes provided by Django.
 
 AUTH_PASSWORD_VALIDATORS = [
     {
@@ -155,17 +152,6 @@ STORAGES = {
 # Default primary key field type
 # https://docs.djangoproject.com/en/6.0/ref/settings/#default-auto-field
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
-
-
-# ---------------------------------------------------------------------------
-#  Razorpay Configuration (Test Mode)
-# ---------------------------------------------------------------------------
-# Set these environment variables before running the server:
-#   export RAZORPAY_KEY_ID="rzp_test_..."
-#   export RAZORPAY_KEY_SECRET="your_key_secret_here"
-#
-# In test mode, use card number 4111 1111 1111 1111 with any future
-# expiry and any CVV to simulate a successful payment.
 
 
 RAZORPAY_KEY_ID = os.getenv("RAZORPAY_KEY_ID")

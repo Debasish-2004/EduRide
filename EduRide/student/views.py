@@ -106,7 +106,7 @@ def bus_locations_api(request):
     for route in routes:
         # Use live GPS position if available, otherwise fall back to
         # the first point of the static route coordinates.
-        if route.live_latitude is not None and route.live_longitude is not None:
+        if route.is_active and route.live_latitude is not None and route.live_longitude is not None:
             lat = route.live_latitude
             lng = route.live_longitude
         else:

@@ -3,7 +3,7 @@ import uuid
 from django.core.exceptions import ValidationError
 from django.db import models
 from django.db.models.functions import Lower
-from django.db.models.signals import pre_delete
+from django.db.models.signals import pre_delete, post_delete
 from django.dispatch import receiver
 from django.contrib.auth.models import User
 
@@ -94,6 +94,19 @@ def delete_institute_members(sender, instance, **kwargs):
     ).exclude(
         id=instance.admin_id,
     ).delete()
+
+
+@receiver(post_delete, sender=Institute)
+def delete_institute_admin(sender, instance, **kwargs):
+    """
+    When an Institute is deleted (e.g. via Django Admin), delete the associated
+    admin User as well. The admin's profile role is 'institute_admin'.
+
+    This is necessary because the OneToOneField CASCADE only flows from User -> Institute.
+    Without this, deleting an Institute orphans the admin User.
+    """
+    if instance.admin_id:
+        User.objects.filter(id=instance.admin_id).delete()
 
 
 class Route(models.Model):
