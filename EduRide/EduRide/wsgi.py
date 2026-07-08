@@ -10,7 +10,7 @@ https://docs.djangoproject.com/en/6.0/howto/deployment/wsgi/
 import os
 
 from django.core.wsgi import get_wsgi_application
-
+# same line both in manage.py as for starging the web . we need many info from the setting.py.
 os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'EduRide.settings')
 
-application = get_wsgi_application()
+application = get_wsgi_application()#creates a WSGI application object.

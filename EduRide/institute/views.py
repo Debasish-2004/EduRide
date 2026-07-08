@@ -51,6 +51,18 @@ def _parse_schedules(raw):
         time_str = (s.get("time") or "").strip()
         if not label or not time_str:
             return None, "Each schedule must have a label and departure time."
+
+        try:
+            parts = time_str.split(":")
+            if len(parts) < 2:
+                raise ValueError
+            h = int(parts[0])
+            m = int(parts[1])
+            if not (0 <= h <= 23) or not (0 <= m <= 59):
+                raise ValueError
+        except (ValueError, TypeError, IndexError):
+            return None, f"Invalid departure time format for schedule '{label}'."
+
         s["label"] = label
         s["time"] = time_str
 
@@ -274,7 +286,10 @@ def assign_driver(request, bus_id):
         # Unassign: remove driver and deactivate the route.
         bus.driver = None
         bus.is_active = False
-        bus.save(update_fields=["driver", "is_active"])
+        bus.live_latitude = None
+        bus.live_longitude = None
+        bus.location_updated_at = None
+        bus.save(update_fields=["driver", "is_active", "live_latitude", "live_longitude", "location_updated_at"])
         messages.success(request, f"Driver unassigned from bus {bus.bus_no}.")
     else:
         try:
@@ -294,7 +309,11 @@ def assign_driver(request, bus_id):
             return redirect("buslist")
 
         bus.driver = driver_user
-        bus.save(update_fields=["driver"])
+        bus.is_active = False
+        bus.live_latitude = None
+        bus.live_longitude = None
+        bus.location_updated_at = None
+        bus.save(update_fields=["driver", "is_active", "live_latitude", "live_longitude", "location_updated_at"])
         messages.success(request, f"Driver {driver_user.username} assigned to bus {bus.bus_no}.")
 
     return redirect("buslist")
@@ -680,7 +699,7 @@ def institute_signup(request):
     CHANGES FROM OLD CODE:
     ----------------------
     OLD: user.is_staff = True  (gave access to Django admin panel — security risk!)
-    NEW: UserProfile.objects.create(user=user, role="institute_admin")
+    NEW: UserProfile.objects.create(user=user, role="institute_admin", institute=institute)
          (only gives access to institute pages, NOT Django admin)
     NEW: Also creates an Institute record with the admin's chosen name.
          The institute code is auto-generated.
@@ -720,7 +739,7 @@ def institute_signup(request):
             messages.error(request, "Email already exists.")
             return redirect("institute_signup")
 
-        # --- Create the user + profile + institute atomically ---
+        # --- Create the user + institute + profile atomically ---
         # WHY transaction.atomic()?
         # If any of the three creates fail, they ALL roll back.
         with transaction.atomic():
@@ -731,15 +750,18 @@ def institute_signup(request):
                 password=password,
             )
 
-            # Create a UserProfile with role="institute_admin".
-            # institute is NULL for admins — they're linked via Institute.admin.
-            UserProfile.objects.create(user=user, role="institute_admin")
-
             # Create the Institute record.
             # institute_code is auto-generated in Institute.save().
-            Institute.objects.create(
+            institute = Institute.objects.create(
                 name=institute_name,
                 admin=user,
+            )
+
+            # Create a UserProfile with role="institute_admin" linked to the institute.
+            UserProfile.objects.create(
+                user=user,
+                role="institute_admin",
+                institute=institute,
             )
 
         messages.success(request, "Institute admin account created successfully.")
@@ -828,7 +850,10 @@ def remove_driver(request, user_id):
     assigned_route = Route.objects.filter(driver=driver_user).first()
     if assigned_route:
         assigned_route.is_active = False
-        assigned_route.save(update_fields=["is_active"])
+        assigned_route.live_latitude = None
+        assigned_route.live_longitude = None
+        assigned_route.location_updated_at = None
+        assigned_route.save(update_fields=["is_active", "live_latitude", "live_longitude", "location_updated_at"])
     driver_user.delete()  # cascades to UserProfile; route.driver → NULL via SET_NULL
     messages.success(request, f"Driver '{driver_user.username}' has been removed.")
     return redirect("institute_admin")
